@@ -33,29 +33,24 @@ func TestRenderNoStateFile(t *testing.T) {
 func TestRenderStates(t *testing.T) {
 	bin := buildBinary(t)
 
-	cases := []struct {
-		state string
-		want  string
-	}{
-		{"working",  "#[fg=cyan]▶ #[default]"},
-		{"question", "#[fg=yellow,bold]? #[default]"},
-		{"error",    "#[fg=red]✗ #[default]"},
-		{"dead",     "#[fg=brightblack,dim]x #[default]"},
-		{"idle",     ""},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.state, func(t *testing.T) {
+	cases := []string{"working", "question", "error", "dead", "idle"}
+	for _, state := range cases {
+		t.Run(state, func(t *testing.T) {
 			dir := t.TempDir()
 			stateFile := filepath.Join(dir, "state.json")
-			json := `{"sessions":{"s1":{"harness":"pi","state":"` + tc.state + `","pid":1,"tmux_target":"s:%0","updated_at":100}}}`
+			json := `{"sessions":{"s1":{"harness":"pi","state":"` + state + `","pid":1,"tmux_target":"s:%0","updated_at":100}}}`
 			require.NoError(t, os.WriteFile(stateFile, []byte(json), 0644))
 
 			cmd := exec.Command(bin, "render", "s:%0")
 			cmd.Env = append(os.Environ(), "AGENT_STATUS_STATE_DIR="+dir)
 			out, err := cmd.CombinedOutput()
-			assert.NoError(t, err)
-			assert.Equal(t, tc.want, string(out))
+			require.NoError(t, err)
+
+			if state == "idle" {
+				assert.Empty(t, string(out))
+			} else {
+				assert.Equal(t, "#{E:@agent_mark_"+state+"}", string(out))
+			}
 		})
 	}
 }

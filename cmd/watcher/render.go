@@ -29,7 +29,13 @@ func runRender(args []string) {
 		if s.TmuxTarget != tmuxTarget {
 			continue
 		}
-		fmt.Print(markerFor(s))
+		// idle shows nothing — no marker, no option reference
+		if s.State == "idle" {
+			return
+		}
+		// Output a tmux variable reference — the plugin or theme defines
+		// @agent_mark_<state> with the actual colours and marker glyph.
+		fmt.Printf("#{E:@agent_mark_%s}", s.State)
 		return
 	}
 }
@@ -42,21 +48,6 @@ type sessionEntry struct {
 	DeadSince  *int64 `json:"dead_since"`
 	UpdatedAt  int64  `json:"updated_at"`
 	Message    string `json:"message"`
-}
-
-func markerFor(s sessionEntry) string {
-	switch s.State {
-	case "working":
-		return "#[fg=cyan]▶ #[default]"
-	case "question":
-		return "#[fg=yellow,bold]? #[default]"
-	case "error":
-		return "#[fg=red]✗ #[default]"
-	case "dead":
-		return "#[fg=brightblack,dim]x #[default]"
-	default:
-		return ""
-	}
 }
 
 func stateDir() string {
