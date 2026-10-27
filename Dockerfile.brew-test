@@ -1,0 +1,43 @@
+# Test Homebrew formula using Linuxbrew in an Ubuntu container.
+# Validates formula parsing, binary install, and test block.
+# Does NOT test launchd service (needs macOS runner for that).
+#
+#   docker build -t brew-test -f Dockerfile.brew-test .
+#   docker run --rm -it brew-test
+#
+# Or using GitHub Actions: macos-latest runner tests the real thing.
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Homebrew (Linuxbrew) dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    curl \
+    file \
+    git \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Homebrew as a non-root user
+RUN useradd -m brew && echo 'brew ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+USER brew
+WORKDIR /home/brew
+
+# Install Homebrew silently
+RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Add brew to PATH for the brew user
+ENV PATH="/home/brew/.linuxbrew/bin:/home/brew/.linuxbrew/sbin:$PATH"
+
+# Copy the formula
+COPY --chown=brew:brew Formula/agent-status.rb /home/brew/agent-status.rb
+
+# Test: install from local formula, run the test block
+RUN brew install --verbose /home/brew/agent-status.rb \
+    && brew test agent-status \
+    && watcher emit 2>&1 | grep -q usage \
+    && echo "=== ALL BREW TESTS PASSED ==="
