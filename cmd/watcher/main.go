@@ -18,10 +18,6 @@ import (
 var clock = time.Now
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "install" {
-		runInstall()
-		return
-	}
 	if len(os.Args) > 1 && os.Args[1] == "emit" {
 		runEmit(os.Args[2:])
 		return
