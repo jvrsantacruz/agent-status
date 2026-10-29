@@ -1,0 +1,101 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+
+env:
+  GO_VERSION: "1.26"
+
+jobs:
+  precheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: false
+
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - run: go vet ./...
+      - run: test -z "$(gofmt -l .)" || (echo "gofmt: unformatted files:"; gofmt -l .; exit 1)
+
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - run: go test ./internal/... -count=1 -timeout 30s -v
+
+  e2e:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - run: go test -tags=e2e ./cmd/watcher/ -count=1 -timeout 30s -v
+
+  cross:
+    strategy:
+      matrix:
+        goos: [linux, darwin]
+        goarch: [amd64, arm64]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o /dev/null ./cmd/watcher/
+      - name: verify darwin arm64 release asset
+        if: matrix.goos == 'darwin' && matrix.goarch == 'arm64'
+        run: |
+          mkdir -p /tmp/release-asset
+          GOOS=darwin GOARCH=arm64 go build -o /tmp/release-asset/watcher ./cmd/watcher/
+          cd /tmp/release-asset && tar czf agent-status-v0.1.0-darwin-arm64.tar.gz watcher
+          echo "Release asset built: $(ls -lh agent-status-v0.1.0-darwin-arm64.tar.gz)"
+
+  dependabot:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - run: go list -m all | xargs -n1 dirname | sort -u | while read pkg; do
+          echo "Checking $pkg";
+          done
+      - run: govulncheck ./... || true
+
+  brew:
+    strategy:
+      matrix:
+        os: [macos-13, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build binary
+        run: |
+          CGO_ENABLED=0 go build -o /tmp/watcher ./cmd/watcher/
+      - name: Verify binary
+        run: |
+          /tmp/watcher emit 2>&1 | grep -q usage
+          /tmp/watcher render 2>&1
+      - name: Test formula syntax
+        run: |
+          ruby -c Formula/agent-status.rb

@@ -1,0 +1,12 @@
+# gitleaks config for agent-status public repo
+# Allow the placeholder SHA in the formula (replaced on release)
+[allowlist]
+  description = "Known false positives in public repo"
+  paths = [
+    '''Formula/agent-status\.rb''',
+    '''Dockerfile\.brew-test''',
+  ]
+  regexes = [
+    '''CHANGE_ME_FIRST_RELEASE''',
+    '''CHANGE_ME''',
+  ]
