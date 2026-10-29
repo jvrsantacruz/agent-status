@@ -19,14 +19,14 @@ func TestApplyFourStates(t *testing.T) {
 		events []event.Event
 		want   SessionState
 	}{
-		{"working",        []event.Event{e("s1", "working")}, Working},
-		{"question",       []event.Event{e("s1", "question")}, Question},
-		{"idle",           []event.Event{e("s1", "idle")}, Idle},
-		{"error",          []event.Event{e("s1", "error")}, Error},
+		{"working", []event.Event{e("s1", "working")}, Working},
+		{"question", []event.Event{e("s1", "question")}, Question},
+		{"idle", []event.Event{e("s1", "idle")}, Idle},
+		{"error", []event.Event{e("s1", "error")}, Error},
 		{"working→question", []event.Event{e("s1", "working"), e("s1", "question")}, Question},
-		{"working→idle",     []event.Event{e("s1", "working"), e("s1", "idle")}, Idle},
-		{"working→error",    []event.Event{e("s1", "working"), e("s1", "error")}, Error},
-		{"error→working",    []event.Event{e("s1", "error"), e("s1", "working")}, Working},
+		{"working→idle", []event.Event{e("s1", "working"), e("s1", "idle")}, Idle},
+		{"working→error", []event.Event{e("s1", "working"), e("s1", "error")}, Error},
+		{"error→working", []event.Event{e("s1", "error"), e("s1", "working")}, Working},
 		{"question→working", []event.Event{e("s1", "question"), e("s1", "working")}, Working},
 	}
 	for _, tc := range cases {

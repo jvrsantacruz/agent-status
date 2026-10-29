@@ -99,7 +99,6 @@ func TestReaderMalformedLine(t *testing.T) {
 	assert.Equal(t, "t2", e.SessionID)
 }
 
-
 func TestReaderNonBlockingWriter(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "in.fifo")
