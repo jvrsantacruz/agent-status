@@ -8,11 +8,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jvrsantacruz/agent-status-watcher/internal/event"
-	"github.com/jvrsantacruz/agent-status-watcher/internal/export"
-	"github.com/jvrsantacruz/agent-status-watcher/internal/liveness"
-	"github.com/jvrsantacruz/agent-status-watcher/internal/state"
-	"github.com/jvrsantacruz/agent-status-watcher/internal/store"
+	"github.com/jvrsantacruz/agent-status/internal/event"
+	"github.com/jvrsantacruz/agent-status/internal/export"
+	"github.com/jvrsantacruz/agent-status/internal/liveness"
+	"github.com/jvrsantacruz/agent-status/internal/state"
+	"github.com/jvrsantacruz/agent-status/internal/store"
 )
 
 var clock = time.Now

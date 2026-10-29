@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jvrsantacruz/agent-status-watcher/internal/state"
+	"github.com/jvrsantacruz/agent-status/internal/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

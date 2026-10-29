@@ -1,4 +1,4 @@
-module github.com/jvrsantacruz/agent-status-watcher
+module github.com/jvrsantacruz/agent-status
 
 go 1.26.8
 

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jvrsantacruz/agent-status-watcher/internal/event"
+	"github.com/jvrsantacruz/agent-status/internal/event"
 	"github.com/stretchr/testify/assert"
 )
 

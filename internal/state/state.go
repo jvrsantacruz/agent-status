@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jvrsantacruz/agent-status-watcher/internal/event"
+	"github.com/jvrsantacruz/agent-status/internal/event"
 )
 
 type SessionState string

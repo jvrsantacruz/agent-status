@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jvrsantacruz/agent-status-watcher/internal/state"
+	"github.com/jvrsantacruz/agent-status/internal/state"
 )
 
 type StateFile struct {
