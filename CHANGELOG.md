@@ -9,6 +9,8 @@ The first release with installable files. 0.1.0 was tagged, but never built.
 - A session disappears when its agent exits. `emit` takes the agent pid from `--pid`,
   `$AGENT_STATUS_PID` or `$CLAUDE_PID`; before, every session had pid 0 and lived forever.
 - On macOS, `emit` and the daemon use the same FIFO. Before, `emit` wrote to `/tmp`.
+- No event is lost when two arrive close together. Before, after each writer closed, the FIFO had
+  no reader until the daemon reopened it, and an event sent then was dropped.
 - Any agent can emit: `--session`, `--harness`, `--pid`, `--pane`. The `end` state removes a
   session at once. `emit` never exits 2, which would block a Claude Code hook.
 - The binary is `agent-status`, not `watcher`. The daemon starts with `agent-status daemon`; no
