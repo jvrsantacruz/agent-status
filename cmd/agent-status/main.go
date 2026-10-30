@@ -1,166 +1,92 @@
+// Command agent-status shows in the tmux window list what each AI coding
+// agent is doing: working, waiting for you, or failed.
 package main
 
 import (
-	"context"
-	"log/slog"
+	"fmt"
+	"io"
 	"os"
-	"os/signal"
-	"syscall"
+	"runtime"
+	"runtime/debug"
 	"time"
-
-	"github.com/jvrsantacruz/agent-status/internal/event"
-	"github.com/jvrsantacruz/agent-status/internal/export"
-	"github.com/jvrsantacruz/agent-status/internal/liveness"
-	"github.com/jvrsantacruz/agent-status/internal/state"
-	"github.com/jvrsantacruz/agent-status/internal/store"
 )
 
 var clock = time.Now
 
+// version is set at release time with -ldflags "-X main.version=v1.2.3".
+// Without it, the version Go stamps from the git tag is used.
+var version = ""
+
+const usage = `usage: agent-status <command> [arguments]
+
+commands:
+  daemon                          read events, keep state, write state.json
+  emit [flags] <state> [message]  send one event: working, question, idle, error, end
+  render <pane>                   print the tmux marker for a pane id, such as %3
+  doctor                          check the installation end to end
+  version                         print version, commit and platform
+
+'agent-status emit -h' lists the emit flags. Documentation:
+https://github.com/jvrsantacruz/agent-status
+`
+
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "emit" {
-		runEmit(os.Args[2:])
-		return
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprint(stderr, usage)
+		return 2
 	}
-	if len(os.Args) > 1 && os.Args[1] == "render" {
-		runRender(os.Args[2:])
-		return
+	switch args[0] {
+	case "daemon":
+		return runDaemon()
+	case "emit":
+		return runEmit(args[1:], stderr)
+	case "render":
+		return runRender(args[1:], stdout)
+	case "doctor":
+		return runDoctor(stdout)
+	case "version", "--version", "-v":
+		fmt.Fprintln(stdout, versionLine())
+		return 0
+	case "help", "--help", "-h":
+		fmt.Fprint(stdout, usage)
+		return 0
 	}
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})))
+	fmt.Fprintf(stderr, "agent-status: unknown command %q\n\n%s", args[0], usage)
+	return 2
+}
 
-	stateDir := envOrDefault("AGENT_STATUS_STATE_DIR", defaultStateDir())
-	runtimeDir := envOrDefault("AGENT_STATUS_RUNTIME_DIR", defaultRuntimeDir())
-
-	fifoPath := runtimeDir + "/in.fifo"
-	dbPath := stateDir + "/state.db"
-	stateJSONPath := stateDir + "/state.json"
-
-	slog.Info("starting", "fifo", fifoPath, "db", dbPath, "state", stateJSONPath)
-
-	// Open store
-	st, err := store.Open(dbPath)
-	if err != nil {
-		slog.Error("store open", "error", err)
-		os.Exit(1)
+// buildVersion returns the release version, or what Go stamped from git.
+func buildVersion() string {
+	if version != "" {
+		return version
 	}
-	defer st.Close()
-
-	// Initialise state machine
-	sm := state.NewMachine()
-
-	// Ensure FIFO exists
-	rd := event.NewReader(fifoPath)
-	if err := rd.Ready(); err != nil {
-		slog.Error("fifo ready", "error", err)
-		os.Exit(1)
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return bi.Main.Version
 	}
+	return "devel"
+}
 
-	// Signal handling for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
-	// Channel for state change notifications
-	changed := make(chan struct{}, 1)
-	notify := func() {
-		select {
-		case changed <- struct{}{}:
-		default:
-		}
-	}
-
-	// Event reader goroutine
-	eventCh := rd.Events(ctx.Done())
-	go func() {
-		for e := range eventCh {
-			if err := st.AppendEvent(e); err != nil {
-				slog.Error("append event", "session_id", e.SessionID, "error", err)
-			}
-			sm.Apply(e)
-			if err := st.UpsertSession(sm.Snapshot()[e.SessionID], e.SessionID); err != nil {
-				slog.Error("upsert session", "session_id", e.SessionID, "error", err)
-			}
-			notify()
-			slog.Debug("event", "session_id", e.SessionID, "event", e.Event)
-		}
-	}()
-
-	// Liveness loop (60s)
-	go func() {
-		ticker := time.NewTicker(60 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case now := <-ticker.C:
-				for id, pid := range sm.PIDs() {
-					if !liveness.Alive(pid) {
-						sm.MarkDead(id, now)
-						// Update store
-						snapshot := sm.Snapshot()
-						if s, ok := snapshot[id]; ok {
-							if err := st.UpsertSession(s, id); err != nil {
-								slog.Error("store dead session", "session_id", id, "error", err)
-							}
-						}
-						_ = st.PruneEvents(7*24*time.Hour, now)
-						slog.Info("dead", "session_id", id, "pid", pid)
-						notify()
-					}
+// versionLine is what a bug report needs: version, commit, commit date, toolchain, platform.
+func versionLine() string {
+	rev, at := "unknown", "unknown"
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range bi.Settings {
+			switch s.Key {
+			case "vcs.revision":
+				rev = s.Value[:min(len(s.Value), 12)]
+			case "vcs.time":
+				at = s.Value
+			case "vcs.modified":
+				if s.Value == "true" {
+					rev += "+dirty"
 				}
-				sm.PruneDead(5*time.Minute, now)
 			}
 		}
-	}()
-
-	// Export loop — writes state.json when notified, also every 10s as fallback
-	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-changed:
-			case <-ticker.C:
-			}
-			if err := export.Write(stateJSONPath, sm.Snapshot()); err != nil {
-				slog.Error("export", "error", err)
-			}
-		}
-	}()
-
-	// Wait for signal
-	sig := <-sigCh
-	slog.Info("shutting down", "signal", sig)
-	cancel()
-	// Final export
-	if err := export.Write(stateJSONPath, sm.Snapshot()); err != nil {
-		slog.Error("final export", "error", err)
 	}
-}
-
-func envOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
-
-func defaultStateDir() string {
-	if d := os.Getenv("XDG_STATE_HOME"); d != "" {
-		return d + "/agent-status"
-	}
-	return os.Getenv("HOME") + "/.local/state/agent-status"
-}
-
-func defaultRuntimeDir() string {
-	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
-		return d + "/agent-status"
-	}
-	return "/tmp/agent-status"
+	return fmt.Sprintf("agent-status %s (%s, %s) %s %s/%s",
+		buildVersion(), rev, at, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }

@@ -8,25 +8,40 @@ import (
 	"time"
 
 	"github.com/jvrsantacruz/agent-status/internal/event"
-	"github.com/jvrsantacruz/agent-status/internal/state"
 
 	_ "modernc.org/sqlite"
 )
+
+// schemaVersion is stored in PRAGMA user_version. The events table is a
+// short history, so an older schema is dropped rather than migrated.
+const schemaVersion = 2
 
 type Store struct {
 	db *sql.DB
 }
 
+// Row is one stored event with what the daemon did with it.
+type Row struct {
+	SessionID   string
+	Harness     string
+	Event       string
+	PID         int
+	Pane        string
+	TimestampMs int64
+	ReceivedMs  int64
+	Known       bool
+}
+
 func Open(path string) (*Store, error) {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("store mkdir %s: %w", dir, err)
 	}
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("store open: %w", err)
 	}
-	// Enable WAL and busy timeout via PRAGMAs
+	db.SetMaxOpenConns(1)
 	for _, pragma := range []string{
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA busy_timeout=5000",
@@ -37,46 +52,51 @@ func Open(path string) (*Store, error) {
 		}
 	}
 	if err := migrate(db); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("store migrate: %w", err)
 	}
-	db.SetMaxOpenConns(1)
+	if err := os.Chmod(path, 0o600); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store chmod: %w", err)
+	}
 	return &Store{db: db}, nil
 }
 
 func migrate(db *sql.DB) error {
-	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS events (
+	var v int
+	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
+		return err
+	}
+	if v == schemaVersion {
+		return nil
+	}
+	// No message column: the text of a notification is not kept on disk.
+	_, err := db.Exec(fmt.Sprintf(`
+		DROP TABLE IF EXISTS events;
+		DROP TABLE IF EXISTS sessions;
+		CREATE TABLE events (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			session_id TEXT NOT NULL,
 			harness TEXT NOT NULL,
 			event TEXT NOT NULL,
 			pid INTEGER NOT NULL,
-			tmux_target TEXT NOT NULL DEFAULT '',
+			tmux_pane TEXT NOT NULL DEFAULT '',
 			timestamp_ms INTEGER NOT NULL,
-			message TEXT NOT NULL DEFAULT ''
+			received_ms INTEGER NOT NULL,
+			known INTEGER NOT NULL
 		);
-		CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, timestamp_ms);
-
-		CREATE TABLE IF NOT EXISTS sessions (
-			session_id TEXT PRIMARY KEY,
-			harness TEXT NOT NULL,
-			state TEXT NOT NULL,
-			pid INTEGER NOT NULL DEFAULT 0,
-			tmux_target TEXT NOT NULL DEFAULT '',
-			dead_since INTEGER,
-			updated_at INTEGER NOT NULL,
-			message TEXT NOT NULL DEFAULT ''
-		);
-	`)
+		CREATE INDEX idx_events_session ON events(session_id, timestamp_ms);
+		PRAGMA user_version = %d;
+	`, schemaVersion))
 	return err
 }
 
-// AppendEvent stores a raw event.
-func (s *Store) AppendEvent(e event.Event) error {
+// AppendEvent stores an event, when it arrived and whether it was understood.
+func (s *Store) AppendEvent(e event.Event, received time.Time, known bool) error {
 	_, err := s.db.Exec(
-		`INSERT INTO events (session_id, harness, event, pid, tmux_target, timestamp_ms, message)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		e.SessionID, e.Harness, e.Event, e.PID, e.TmuxTarget, e.TimestampMs, e.Message,
+		`INSERT INTO events (session_id, harness, event, pid, tmux_pane, timestamp_ms, received_ms, known)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		e.SessionID, e.Harness, e.Event, e.PID, e.Pane, e.TimestampMs, received.UnixMilli(), known,
 	)
 	if err != nil {
 		return fmt.Errorf("append event: %w", err)
@@ -84,32 +104,35 @@ func (s *Store) AppendEvent(e event.Event) error {
 	return nil
 }
 
-// UpsertSession writes the materialised session state.
-func (s *Store) UpsertSession(sess state.Session, id string) error {
-	_, err := s.db.Exec(
-		`INSERT INTO sessions (session_id, harness, state, pid, tmux_target, dead_since, updated_at, message)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(session_id) DO UPDATE SET
-			harness=excluded.harness, state=excluded.state, pid=excluded.pid,
-			tmux_target=excluded.tmux_target, dead_since=excluded.dead_since,
-			updated_at=excluded.updated_at, message=excluded.message`,
-		id, sess.Harness, string(sess.State), sess.PID, sess.TmuxTarget,
-		sess.DeadSince, sess.UpdatedAt, sess.Message,
-	)
+// Recent returns the last n events of a session, newest first.
+func (s *Store) Recent(sessionID string, n int) ([]Row, error) {
+	rows, err := s.db.Query(
+		`SELECT session_id, harness, event, pid, tmux_pane, timestamp_ms, received_ms, known
+		 FROM events WHERE session_id = ? ORDER BY id DESC LIMIT ?`, sessionID, n)
 	if err != nil {
-		return fmt.Errorf("upsert session %s: %w", id, err)
+		return nil, fmt.Errorf("recent events %s: %w", sessionID, err)
 	}
-	return nil
+	defer rows.Close()
+	var out []Row
+	for rows.Next() {
+		var r Row
+		if err := rows.Scan(&r.SessionID, &r.Harness, &r.Event, &r.PID, &r.Pane,
+			&r.TimestampMs, &r.ReceivedMs, &r.Known); err != nil {
+			return nil, fmt.Errorf("recent events %s: %w", sessionID, err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
-// PruneEvents removes events older than ttl.
-func (s *Store) PruneEvents(ttl time.Duration, now time.Time) error {
+// PruneEvents removes events older than ttl and returns how many.
+func (s *Store) PruneEvents(ttl time.Duration, now time.Time) (int64, error) {
 	cutoff := now.Add(-ttl).UnixMilli()
-	_, err := s.db.Exec(`DELETE FROM events WHERE timestamp_ms < ?`, cutoff)
+	res, err := s.db.Exec(`DELETE FROM events WHERE timestamp_ms < ?`, cutoff)
 	if err != nil {
-		return fmt.Errorf("prune events: %w", err)
+		return 0, fmt.Errorf("prune events: %w", err)
 	}
-	return nil
+	return res.RowsAffected()
 }
 
 // Close closes the database.

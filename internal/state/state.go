@@ -18,13 +18,26 @@ const (
 )
 
 type Session struct {
-	Harness    string       `json:"harness"`
-	State      SessionState `json:"state"`
-	PID        int          `json:"pid"`
-	TmuxTarget string       `json:"tmux_target"`
-	DeadSince  *int64       `json:"dead_since"`
-	UpdatedAt  int64        `json:"updated_at"`
-	Message    string       `json:"message"`
+	Harness   string       `json:"harness"`
+	State     SessionState `json:"state"`
+	PID       int          `json:"pid"`
+	Pane      string       `json:"tmux_pane"`
+	DeadSince *int64       `json:"dead_since"`
+	UpdatedAt int64        `json:"updated_at"`
+	Message   string       `json:"message"`
+	// Reason names what set State: "event:<name>", "event:unknown(<name>)"
+	// or "liveness:pid_gone".
+	Reason string `json:"reason"`
+}
+
+// End is the event that removes a session, sent when an agent exits.
+const End = "end"
+
+// Outcome is what one Apply did, for the daemon's log line.
+type Outcome struct {
+	Prev  SessionState
+	Next  SessionState
+	Known bool
 }
 
 type Machine struct {
@@ -39,7 +52,7 @@ func NewMachine() *Machine {
 }
 
 // Apply an event from the FIFO. Thread-safe.
-func (m *Machine) Apply(e event.Event) {
+func (m *Machine) Apply(e event.Event) Outcome {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -48,17 +61,28 @@ func (m *Machine) Apply(e event.Event) {
 		s = &Session{State: Idle}
 		m.sessions[e.SessionID] = s
 	}
+	out := Outcome{Prev: s.State, Known: true}
+	if e.Event == End {
+		delete(m.sessions, e.SessionID)
+		return out
+	}
 	s.Harness = e.Harness
 	switch SessionState(e.Event) {
 	case Working, Question, Idle, Error:
 		s.State = SessionState(e.Event)
+		s.Reason = "event:" + e.Event
+	default:
+		out.Known = false
+		s.Reason = "event:unknown(" + e.Event + ")"
 	}
 	s.PID = e.PID
-	s.TmuxTarget = e.TmuxTarget
+	s.Pane = e.Pane
 	s.UpdatedAt = e.TimestampMs
 	s.Message = e.Message
 	// Clear dead_since on any new event — the session came back.
 	s.DeadSince = nil
+	out.Next = s.State
+	return out
 }
 
 // MarkDead sets a session as dead. Thread-safe.
@@ -73,6 +97,7 @@ func (m *Machine) MarkDead(sessionID string, now time.Time) {
 	ms := now.UnixMilli()
 	s.DeadSince = &ms
 	s.State = Dead
+	s.Reason = "liveness:pid_gone"
 	s.PID = 0
 	s.UpdatedAt = ms
 }
@@ -98,20 +123,6 @@ func (m *Machine) Snapshot() map[string]Session {
 	out := make(map[string]Session, len(m.sessions))
 	for id, s := range m.sessions {
 		out[id] = *s
-	}
-	return out
-}
-
-// PIDs returns all non-zero PIDs indexed by session id.
-func (m *Machine) PIDs() map[string]int {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	out := make(map[string]int, len(m.sessions))
-	for id, s := range m.sessions {
-		if s.PID > 0 {
-			out[id] = s.PID
-		}
 	}
 	return out
 }

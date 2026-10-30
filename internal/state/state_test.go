@@ -62,8 +62,35 @@ func TestApplyRemovesDeadOnAnyEvent(t *testing.T) {
 func TestApplyUnknownEventIgnored(t *testing.T) {
 	t.Parallel()
 	sm := NewMachine()
-	sm.Apply(e("s1", "unknown"))
+	out := sm.Apply(e("s1", "unknown"))
+	assert.False(t, out.Known)
 	assert.Equal(t, Idle, sm.Snapshot()["s1"].State)
+	assert.Equal(t, "event:unknown(unknown)", sm.Snapshot()["s1"].Reason)
+}
+
+func TestApplyOutcomeAndReason(t *testing.T) {
+	t.Parallel()
+	sm := NewMachine()
+	sm.Apply(e("s1", "working"))
+	out := sm.Apply(e("s1", "question"))
+	assert.Equal(t, Outcome{Prev: Working, Next: Question, Known: true}, out)
+	assert.Equal(t, "event:question", sm.Snapshot()["s1"].Reason)
+}
+
+func TestApplyEndRemovesSession(t *testing.T) {
+	t.Parallel()
+	sm := NewMachine()
+	sm.Apply(e("s1", "working"))
+	sm.Apply(e("s1", End))
+	assert.NotContains(t, sm.Snapshot(), "s1")
+}
+
+func TestMarkDeadReason(t *testing.T) {
+	t.Parallel()
+	sm := NewMachine()
+	sm.Apply(event.Event{SessionID: "s1", Event: "working", PID: 7})
+	sm.MarkDead("s1", time.Now())
+	assert.Equal(t, "liveness:pid_gone", sm.Snapshot()["s1"].Reason)
 }
 
 func TestApplyMultipleSessions(t *testing.T) {
@@ -133,25 +160,6 @@ func TestPruneDeadMissingSession(t *testing.T) {
 	assert.Empty(t, sm.Snapshot())
 }
 
-func TestPIDs(t *testing.T) {
-	t.Parallel()
-	sm := NewMachine()
-	sm.Apply(event.Event{SessionID: "s1", PID: 10, Event: "working"})
-	sm.Apply(event.Event{SessionID: "s2", PID: 0, Event: "idle"})
-	sm.Apply(event.Event{SessionID: "s3", Event: "working"})
-
-	pids := sm.PIDs()
-	assert.Equal(t, map[string]int{"s1": 10}, pids)
-}
-
-func TestPIDsAfterDead(t *testing.T) {
-	t.Parallel()
-	sm := NewMachine()
-	sm.Apply(event.Event{SessionID: "s1", PID: 10, Event: "working"})
-	sm.MarkDead("s1", time.Now())
-	assert.Empty(t, sm.PIDs())
-}
-
 func TestSnapshotIsolation(t *testing.T) {
 	t.Parallel()
 	sm := NewMachine()
@@ -168,13 +176,13 @@ func TestApplySetsFields(t *testing.T) {
 	t.Parallel()
 	sm := NewMachine()
 	ev := event.Event{SessionID: "s1", Event: "question", PID: 42,
-		TmuxTarget: "main:%0", Message: "hello", TimestampMs: 100}
+		Pane: "%0", Message: "hello", TimestampMs: 100}
 	sm.Apply(ev)
 
 	s := sm.Snapshot()["s1"]
 	assert.Equal(t, Question, s.State)
 	assert.Equal(t, 42, s.PID)
-	assert.Equal(t, "main:%0", s.TmuxTarget)
+	assert.Equal(t, "%0", s.Pane)
 	assert.Equal(t, "hello", s.Message)
 }
 

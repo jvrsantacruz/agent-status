@@ -1,61 +1,42 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
+	"io"
+	"strings"
+
+	"github.com/jvrsantacruz/agent-status/internal/export"
+	"github.com/jvrsantacruz/agent-status/internal/state"
 )
 
-func runRender(args []string) {
+// runRender prints nothing on any error: its output lands in the tmux status
+// line on every refresh. doctor is where errors are reported.
+func runRender(args []string, stdout io.Writer) int {
 	if len(args) < 1 {
-		return
+		return 0
 	}
-	tmuxTarget := args[0]
-
-	data, err := os.ReadFile(filepath.Join(stateDir(), "state.json"))
+	sf, err := export.Read(statePath())
 	if err != nil {
-		return
+		return 0
 	}
+	fmt.Fprint(stdout, marker(sf, args[0]))
+	return 0
+}
 
-	var sf struct {
-		Sessions map[string]sessionEntry `json:"sessions"`
-	}
-	if err := json.Unmarshal(data, &sf); err != nil {
-		return
-	}
-
+// marker returns the tmux format for the newest session on a pane. It prints
+// a reference to @agent_mark_<state>; the plugin or the theme defines the
+// glyph and colours. Idle shows nothing.
+func marker(sf export.StateFile, pane string) string {
+	// Older themes pass "session:%3"; the pane id alone identifies the pane.
+	pane = pane[strings.LastIndex(pane, ":")+1:]
+	var newest *state.Session
 	for _, s := range sf.Sessions {
-		if s.TmuxTarget != tmuxTarget {
-			continue
+		if s.Pane == pane && (newest == nil || s.UpdatedAt > newest.UpdatedAt) {
+			newest = &s
 		}
-		// idle shows nothing — no marker, no option reference
-		if s.State == "idle" {
-			return
-		}
-		// Output a tmux variable reference — the plugin or theme defines
-		// @agent_mark_<state> with the actual colours and marker glyph.
-		fmt.Printf("#{E:@agent_mark_%s}", s.State)
-		return
 	}
-}
-
-type sessionEntry struct {
-	Harness    string `json:"harness"`
-	State      string `json:"state"`
-	PID        int    `json:"pid"`
-	TmuxTarget string `json:"tmux_target"`
-	DeadSince  *int64 `json:"dead_since"`
-	UpdatedAt  int64  `json:"updated_at"`
-	Message    string `json:"message"`
-}
-
-func stateDir() string {
-	if d := os.Getenv("AGENT_STATUS_STATE_DIR"); d != "" {
-		return d
+	if newest == nil || newest.State == state.Idle {
+		return ""
 	}
-	if d := os.Getenv("XDG_STATE_HOME"); d != "" {
-		return d + "/agent-status"
-	}
-	return os.Getenv("HOME") + "/.local/state/agent-status"
+	return fmt.Sprintf("#{E:@agent_mark_%s}", newest.State)
 }

@@ -3,6 +3,7 @@ package event
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,7 +14,11 @@ import (
 // Reader reads JSONL events from a FIFO.
 type Reader struct {
 	path string
+	// Rejected, when set, is told about every line that is not a valid event.
+	Rejected func(line []byte, err error)
 }
+
+var errNoSession = errors.New("no session_id")
 
 func NewReader(path string) *Reader {
 	return &Reader{path: path}
@@ -22,11 +27,11 @@ func NewReader(path string) *Reader {
 // Ready ensures the FIFO exists. Creates it if missing.
 func (r *Reader) Ready() error {
 	dir := filepath.Dir(r.path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("event reader: create dir %s: %w", dir, err)
 	}
 	// mkfifo: no-op if already exists
-	if err := syscall.Mkfifo(r.path, 0666); err != nil && !os.IsExist(err) {
+	if err := syscall.Mkfifo(r.path, 0o600); err != nil && !os.IsExist(err) {
 		return fmt.Errorf("event reader: mkfifo %s: %w", r.path, err)
 	}
 	return nil
@@ -63,8 +68,15 @@ func (r *Reader) readLines(f io.Reader, out chan<- Event, stop <-chan struct{}) 
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		var e Event
-		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
-			continue // drop malformed lines
+		err := json.Unmarshal(sc.Bytes(), &e)
+		if err == nil && e.SessionID == "" {
+			err = errNoSession
+		}
+		if err != nil {
+			if r.Rejected != nil {
+				r.Rejected(sc.Bytes(), err)
+			}
+			continue
 		}
 		select {
 		case out <- e:

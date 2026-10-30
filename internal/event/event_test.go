@@ -16,7 +16,7 @@ func TestEventMarshalRoundTrip(t *testing.T) {
 		Harness:     "claude",
 		Event:       "question",
 		PID:         1234,
-		TmuxTarget:  "main:%12",
+		Pane:        "%12",
 		TimestampMs: 1700000000000,
 		Message:     "what next?",
 	}

@@ -16,9 +16,9 @@ func TestWrite(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
 	sessions := map[string]state.Session{
-		"s1": {Harness: "claude", State: state.Working, PID: 123, TmuxTarget: "m:%0", UpdatedAt: 100},
+		"s1": {Harness: "claude", State: state.Working, PID: 123, Pane: "%0", UpdatedAt: 100},
 	}
-	err := Write(path, sessions)
+	err := Write(path, StateFile{Sessions: sessions})
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(path)
@@ -37,7 +37,7 @@ func TestWriteEmptySessions(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "empty.json")
-	err := Write(path, make(map[string]state.Session))
+	err := Write(path, StateFile{Sessions: make(map[string]state.Session)})
 	require.NoError(t, err)
 
 	data, _ := os.ReadFile(path)
@@ -57,7 +57,7 @@ func TestWriteDeadSince(t *testing.T) {
 	sessions := map[string]state.Session{
 		"s1": {State: state.Dead, DeadSince: &ms, UpdatedAt: ms},
 	}
-	err := Write(path, sessions)
+	err := Write(path, StateFile{Sessions: sessions})
 	require.NoError(t, err)
 
 	data, _ := os.ReadFile(path)
@@ -78,7 +78,7 @@ func TestWriteDeadSinceNull(t *testing.T) {
 	sessions := map[string]state.Session{
 		"s1": {State: state.Working, DeadSince: nil, UpdatedAt: 1},
 	}
-	err := Write(path, sessions)
+	err := Write(path, StateFile{Sessions: sessions})
 	require.NoError(t, err)
 
 	data, _ := os.ReadFile(path)
@@ -97,7 +97,7 @@ func TestWritePermissionDenied(t *testing.T) {
 	err := os.Chmod(dir, 0444)
 	require.NoError(t, err)
 	path := filepath.Join(dir, "state.json")
-	err = Write(path, map[string]state.Session{})
+	err = Write(path, StateFile{Sessions: map[string]state.Session{}})
 	assert.Error(t, err)
 }
 
@@ -106,9 +106,9 @@ func TestWriteAtomic(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
 
-	err := Write(path, map[string]state.Session{
+	err := Write(path, StateFile{Sessions: map[string]state.Session{
 		"s1": {State: state.Working, UpdatedAt: 1},
-	})
+	}})
 	require.NoError(t, err)
 
 	entries, _ := os.ReadDir(dir)
@@ -122,12 +122,12 @@ func TestWriteOverwrites(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
 
-	require.NoError(t, Write(path, map[string]state.Session{
+	require.NoError(t, Write(path, StateFile{Sessions: map[string]state.Session{
 		"s1": {State: state.Working, UpdatedAt: 1},
-	}))
-	require.NoError(t, Write(path, map[string]state.Session{
+	}}))
+	require.NoError(t, Write(path, StateFile{Sessions: map[string]state.Session{
 		"s2": {State: state.Idle, UpdatedAt: 2},
-	}))
+	}}))
 
 	data, _ := os.ReadFile(path)
 	var out struct {
@@ -144,7 +144,7 @@ func TestWriteNilSessions(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nil.json")
-	err := Write(path, nil)
+	err := Write(path, StateFile{Sessions: nil})
 	require.NoError(t, err)
 
 	data, _ := os.ReadFile(path)
@@ -154,4 +154,21 @@ func TestWriteNilSessions(t *testing.T) {
 	err = json.Unmarshal(data, &out)
 	require.NoError(t, err)
 	assert.Empty(t, out.Sessions)
+}
+
+func TestWriteReadDaemonAndPermissions(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "state.json")
+	in := StateFile{
+		Daemon:   Daemon{Version: "v1.2.3", PID: 9, EventsTotal: 4, EventsRejected: 1},
+		Sessions: map[string]state.Session{"s1": {State: state.Error, Reason: "event:error"}},
+	}
+	require.NoError(t, Write(path, in))
+
+	out, err := Read(path)
+	require.NoError(t, err)
+	assert.Equal(t, in, out)
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }

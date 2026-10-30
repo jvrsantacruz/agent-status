@@ -86,6 +86,8 @@ func TestReaderMalformedLine(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "in.fifo")
 	rd := NewReader(path)
+	var rejected []string
+	rd.Rejected = func(line []byte, err error) { rejected = append(rejected, err.Error()) }
 	require.NoError(t, rd.Ready())
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -93,10 +95,26 @@ func TestReaderMalformedLine(t *testing.T) {
 	ch := rd.Events(ctx.Done())
 
 	writeFifo(t, path, "not json\n")
+	writeFifo(t, path, `{"event":"idle","ts":100}`+"\n")
 	writeFifo(t, path, `{"session_id":"t2","event":"idle","ts":200}`+"\n")
 
 	e := readEvent(t, ch)
 	assert.Equal(t, "t2", e.SessionID)
+	require.Len(t, rejected, 2)
+	assert.Equal(t, "no session_id", rejected[1])
+}
+
+func TestReaderReadyPermissions(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "rt")
+	path := filepath.Join(dir, "in.fifo")
+	require.NoError(t, NewReader(path).Ready())
+
+	info, err := os.Stat(dir)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
+	info, err = os.Stat(path)
+	require.NoError(t, err)
+	assert.Zero(t, info.Mode().Perm()&0o077, "fifo open to others: %v", info.Mode().Perm())
 }
 
 func TestReaderNonBlockingWriter(t *testing.T) {
