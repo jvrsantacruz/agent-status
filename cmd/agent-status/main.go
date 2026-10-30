@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Javier Santacruz
+
 // Command agent-status shows in the tmux window list what each AI coding
 // agent is doing: working, waiting for you, or failed.
 package main

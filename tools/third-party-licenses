@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# third-party-licenses - print the licence notices of every module linked
+# into the binary. Their licences (BSD, MIT) require the notice to travel
+# with the binary; release archives and packages carry THIRD_PARTY_LICENSES.
+#
+#   tools/third-party-licenses > THIRD_PARTY_LICENSES
+set -euo pipefail
+cd "$(dirname "$0")/.."
+# The Go runtime and standard library, linked into every Go binary, carry the
+# same licence text as golang.org/x/sys below (checked identical).
+printf 'Go standard library: the licence of golang.org/x/sys below\n\n'
+GOFLAGS=-mod=mod go list -deps -f '{{with .Module}}{{if not .Main}}{{.Path}} {{.Version}} {{.Dir}}{{end}}{{end}}' ./cmd/agent-status |
+  sort -u |
+  while read -r path version dir; do
+    found=0
+    for f in "$dir"/LICENSE* "$dir"/COPYING* "$dir"/NOTICE*; do
+      [[ -f $f ]] || continue
+      found=1
+      printf '%s %s, %s\n\n' "$path" "$version" "$(basename "$f")"
+      cat "$f"
+      printf '\n\n'
+    done
+    if (( ! found )); then
+      echo "third-party-licenses: no licence file in $path $version" >&2
+      exit 1
+    fi
+  done
