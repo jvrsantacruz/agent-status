@@ -5,6 +5,7 @@ package event
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,28 +44,24 @@ func (r *Reader) Ready() error {
 // Events returns a channel of parsed events, closed when stop is closed or
 // the FIFO fails.
 //
-// The reader holds a write end of its own FIFO open. Without it, each writer
-// that closes gives the reader end of file, and until the reader reopens,
-// a writer finds no reader and its event is lost.
+// The FIFO is opened read-write, so the daemon holds a write end of its own
+// FIFO. Without it, each writer that closes gives the reader end of file,
+// and until the reader reopens, a writer finds no reader and its event is
+// lost. Read-write also keeps the read blocking, which Darwin needs: Go
+// cannot poll a FIFO there (golang.org/issue/24164).
 func (r *Reader) Events(stop <-chan struct{}) <-chan Event {
 	out := make(chan Event, 64)
 	go func() {
 		defer close(out)
-		// Non-blocking open: there is no writer yet. Reads still wait for
-		// data, in Go's poller.
-		f, err := os.OpenFile(r.path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+		f, err := os.OpenFile(r.path, os.O_RDWR, 0)
 		if err != nil {
 			return
 		}
-		w, err := os.OpenFile(r.path, os.O_WRONLY, 0)
-		if err != nil {
-			f.Close()
-			return
-		}
+		defer f.Close()
 		go func() {
 			<-stop
-			f.Close()
-			w.Close()
+			// Wake a read blocked on an empty FIFO; readLines then sees stop.
+			_, _ = f.Write([]byte("\n"))
 		}()
 		_ = r.readLines(f, out, stop)
 	}()
@@ -74,6 +71,14 @@ func (r *Reader) Events(stop <-chan struct{}) <-chan Event {
 func (r *Reader) readLines(f io.Reader, out chan<- Event, stop <-chan struct{}) error {
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
+		select {
+		case <-stop:
+			return io.EOF
+		default:
+		}
+		if len(bytes.TrimSpace(sc.Bytes())) == 0 {
+			continue
+		}
 		var e Event
 		err := json.Unmarshal(sc.Bytes(), &e)
 		if err == nil && e.SessionID == "" {
