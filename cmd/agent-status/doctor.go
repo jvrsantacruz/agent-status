@@ -76,10 +76,7 @@ func roundTrip(check func(bool, string, string)) {
 		check(false, "round trip", err.Error())
 		return
 	}
-	defer func() {
-		e.Event = state.End
-		_ = send(e)
-	}()
+	defer removeSession(e)
 
 	start := clock()
 	for clock().Sub(start) < roundTripWait {
@@ -95,6 +92,24 @@ func roundTrip(check func(bool, string, string)) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	check(false, "round trip", fmt.Sprintf("event not in %s after %s; see the daemon log", statePath(), roundTripWait))
+}
+
+// removeSession sends end for the test session and waits until state.json
+// no longer has it, so doctor leaves the state as it found it.
+func removeSession(e event.Event) {
+	e.Event = state.End
+	if send(e) != nil {
+		return
+	}
+	start := clock()
+	for clock().Sub(start) < roundTripWait {
+		if sf, err := export.Read(statePath()); err == nil {
+			if _, ok := sf.Sessions[e.SessionID]; !ok {
+				return
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 func wiring(report func(string, string, string), check func(bool, string, string)) {
