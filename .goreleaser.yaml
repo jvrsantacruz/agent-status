@@ -1,0 +1,113 @@
+---
+# Release from a tag: `git tag -s vX.Y.Z && git push --tags`. The release
+# workflow runs this; `goreleaser release --snapshot --clean` builds the same
+# files locally without publishing.
+version: 2
+project_name: "agent-status"
+
+builds:
+  - id: "agent-status"
+    main: "./cmd/agent-status"
+    binary: "agent-status"
+    env:
+      - "CGO_ENABLED=0"
+    goos: ["linux", "darwin"]
+    goarch: ["amd64", "arm64"]
+    flags:
+      - "-trimpath"
+    ldflags:
+      - "-s -w -X main.version={{ .Tag }}"
+    # Same commit, same bytes: file times come from the commit, not the clock.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats: ["tar.gz"]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - "LICENSE"
+      - "THIRD_PARTY_LICENSES"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "agent-status.tmux"
+      - "packaging/agent-status.service"
+      - "examples/*"
+
+checksum:
+  name_template: "checksums.txt"
+
+sboms:
+  - artifacts: "archive"
+
+nfpms:
+  - package_name: "agent-status"
+    homepage: "https://github.com/jvrsantacruz/agent-status"
+    maintainer: "Javier Santacruz <javier.santacruz.lc@gmail.com>"
+    description: "Shows in the tmux window list which AI coding agent is working or waiting"
+    license: "GPL-3.0-or-later"
+    section: "utils"
+    formats: ["deb", "rpm"]
+    contents:
+      - src: "packaging/agent-status.service"
+        dst: "/usr/lib/systemd/user/agent-status.service"
+        file_info:
+          mode: 0o644
+      - src: "agent-status.tmux"
+        dst: "/usr/share/agent-status/agent-status.tmux"
+        file_info:
+          mode: 0o755
+      - src: "examples/claude-hooks.json"
+        dst: "/usr/share/doc/agent-status/examples/claude-hooks.json"
+        file_info:
+          mode: 0o644
+      - src: "examples/agent-status-wrap"
+        dst: "/usr/share/doc/agent-status/examples/agent-status-wrap"
+        file_info:
+          mode: 0o755
+      - src: "LICENSE"
+        dst: "/usr/share/doc/agent-status/copyright"
+        file_info:
+          mode: 0o644
+      - src: "THIRD_PARTY_LICENSES"
+        dst: "/usr/share/doc/agent-status/THIRD_PARTY_LICENSES"
+        file_info:
+          mode: 0o644
+
+# A formula, not a cask: `brew services` starts a formula's service block,
+# and a cask has none. GoReleaser deprecates `brews` for casks; until its v3
+# removes it, this is the one config that gives a background service.
+brews:
+  - name: "agent-status"
+    repository:
+      owner: "jvrsantacruz"
+      name: "homebrew-tap"
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: "Formula"
+    homepage: "https://github.com/jvrsantacruz/agent-status"
+    description: "Shows in the tmux window list which AI coding agent is working, waiting, or failed"
+    license: "GPL-3.0-or-later"
+    install: |
+      bin.install "agent-status"
+      pkgshare.install "agent-status.tmux", "examples"
+    service: |
+      run [opt_bin/"agent-status", "daemon"]
+      keep_alive true
+      log_path var/"log/agent-status.log"
+      error_log_path var/"log/agent-status.log"
+    caveats: |
+      Start the daemon now and at login:
+        brew services start agent-status
+      Then add the tmux plugin and an agent hook, see
+        https://github.com/jvrsantacruz/agent-status#quickstart
+      Check the whole chain:
+        agent-status doctor
+    test: |
+      assert_match "agent-status v#{version}", shell_output("#{bin}/agent-status version")
+
+release:
+  # Published by the workflow after the attestation, so the release is
+  # complete before anyone can download from it.
+  draft: true
+  footer: |
+    Verify a download:
+      sha256sum --check --ignore-missing checksums.txt
+      gh attestation verify --owner jvrsantacruz <file>

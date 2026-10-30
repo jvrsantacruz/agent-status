@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "agent-status emit idle"}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "agent-status emit working"}]}],
+    "PreToolUse": [{"hooks": [{"type": "command", "command": "agent-status emit working"}]}],
+    "Notification": [{"hooks": [{"type": "command", "command": "agent-status emit question"}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "agent-status emit idle"}]}],
+    "SessionEnd": [{"hooks": [{"type": "command", "command": "agent-status emit end"}]}]
+  }
+}

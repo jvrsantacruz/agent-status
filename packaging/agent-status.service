@@ -1,0 +1,10 @@
+[Unit]
+Description=agent-status: AI agent state for the tmux status line
+Documentation=https://github.com/jvrsantacruz/agent-status
+
+[Service]
+ExecStart=/usr/bin/agent-status daemon
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

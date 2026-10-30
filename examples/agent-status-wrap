@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# agent-status-wrap COMMAND [ARGS...] - show any command in the tmux window
+# list: working while it runs, error if it fails, nothing once it succeeds.
+# An example emitter that needs no agent and no hook system.
+#
+#   agent-status-wrap aider --model ...
+#   agent-status-wrap make test
+set -u
+[ $# -gt 0 ] || { echo "usage: agent-status-wrap COMMAND [ARGS...]" >&2; exit 2; }
+
+# The session lives as long as the shell that ran this script, so an error
+# stays on screen until you close that shell or run another command.
+emit() { agent-status emit --session "wrap-$$" --harness "$(basename "$1")" --pid "$PPID" "$2" "${3:-}"; }
+
+emit "$1" working
+"$@"
+status=$?
+if [ "$status" -eq 0 ]; then
+	emit "$1" end
+else
+	emit "$1" error "exit $status"
+fi
+exit "$status"
