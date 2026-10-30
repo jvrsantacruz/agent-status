@@ -171,3 +171,45 @@ func readEvent(t *testing.T, ch <-chan Event) Event {
 		return Event{}
 	}
 }
+
+// A writer that opens and closes without writing must not leave the next
+// writer without a reader.
+func TestReaderAlwaysHasReaderBetweenWriters(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "in.fifo")
+	rd := NewReader(path)
+	require.NoError(t, rd.Ready())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch := rd.Events(ctx.Done())
+	writeFifo(t, path, `{"session_id":"first","event":"idle"}`+"\n")
+	readEvent(t, ch)
+
+	for i := range 200 {
+		f, err := os.OpenFile(path, os.O_WRONLY|syscall.O_NONBLOCK, 0)
+		require.NoError(t, err, "open %d: no reader", i)
+		require.NoError(t, f.Close())
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|syscall.O_NONBLOCK, 0)
+	require.NoError(t, err)
+	_, err = f.WriteString(`{"session_id":"last","event":"idle"}` + "\n")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	assert.Equal(t, "last", readEvent(t, ch).SessionID)
+}
+
+func TestReaderStops(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "in.fifo")
+	rd := NewReader(path)
+	require.NoError(t, rd.Ready())
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := rd.Events(ctx.Done())
+	writeFifo(t, path, `{"session_id":"s","event":"idle"}`+"\n")
+	readEvent(t, ch)
+	cancel()
+	select {
+	case _, ok := <-ch:
+		assert.False(t, ok)
+	case <-time.After(3 * time.Second):
+		t.Fatal("reader did not stop")
+	}
+}

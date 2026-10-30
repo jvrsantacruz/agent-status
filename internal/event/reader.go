@@ -40,29 +40,33 @@ func (r *Reader) Ready() error {
 	return nil
 }
 
-// Events returns a channel of parsed events. Blocks on the FIFO open;
-// once open, reads lines forever. Close the FIFO or send a signal to stop.
+// Events returns a channel of parsed events, closed when stop is closed or
+// the FIFO fails.
+//
+// The reader holds a write end of its own FIFO open. Without it, each writer
+// that closes gives the reader end of file, and until the reader reopens,
+// a writer finds no reader and its event is lost.
 func (r *Reader) Events(stop <-chan struct{}) <-chan Event {
 	out := make(chan Event, 64)
 	go func() {
 		defer close(out)
-		for {
-			f, err := os.OpenFile(r.path, os.O_RDONLY, 0)
-			if err != nil {
-				return
-			}
-			err = r.readLines(f, out, stop)
-			f.Close()
-			if err != nil {
-				return
-			}
-			// FIFO closed on the writer side — reopen on next write
-			select {
-			case <-stop:
-				return
-			default:
-			}
+		// Non-blocking open: there is no writer yet. Reads still wait for
+		// data, in Go's poller.
+		f, err := os.OpenFile(r.path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+		if err != nil {
+			return
 		}
+		w, err := os.OpenFile(r.path, os.O_WRONLY, 0)
+		if err != nil {
+			f.Close()
+			return
+		}
+		go func() {
+			<-stop
+			f.Close()
+			w.Close()
+		}()
+		_ = r.readLines(f, out, stop)
 	}()
 	return out
 }
