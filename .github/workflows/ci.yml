@@ -1,91 +1,80 @@
-name: ci
+---
+name: "CI"
 
 on:
   push:
-    branches: [main, master]
-    tags: ["v*"]
+    branches: ["main"]
   pull_request:
-    branches: [main, master]
 
-env:
-  GO_VERSION: "1.26"
+permissions:
+  contents: "read"
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
 
 jobs:
-  precheck:
-    runs-on: ubuntu-24.04
+  checks:
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
         with:
           fetch-depth: 0
-      - name: gitleaks
-        run: gitleaks detect 2>&1 || echo 'gitleaks not installed or config missing'
-
-  lint:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+          persist-credentials: false
+      - uses: "actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"  # v7.0.0
         with:
-          go-version: "${{ env.GO_VERSION }}"
-      - run: go vet ./...
-      - run: "test -z \"$(gofmt -l .)\" || { echo 'gofmt: unformatted files'; gofmt -l .; exit 1; }"
+          go-version-file: "go.mod"
+      - uses: "astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7"  # v10.2.0
+      - name: "Every pre-commit check, on every file"
+        run: "uvx --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure"
 
-  unit:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "${{ env.GO_VERSION }}"
-      - run: go test ./internal/... -count=1 -timeout 30s -v
-
-  e2e:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "${{ env.GO_VERSION }}"
-      - run: go test -tags=e2e ./cmd/watcher/ -count=1 -timeout 30s -v
-
-  cross:
+  test:
     strategy:
+      fail-fast: false
       matrix:
-        goos: [linux, darwin]
-        goarch: [amd64, arm64]
-    runs-on: ubuntu-24.04
+        os: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15"]
+    runs-on: "${{ matrix.os }}"
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
         with:
-          go-version: "${{ env.GO_VERSION }}"
-      - run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o /dev/null ./cmd/watcher/
+          persist-credentials: false
+      - uses: "actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"  # v7.0.0
+        with:
+          go-version-file: "go.mod"
+      - name: "Unit and end to end tests"
+        run: "go test -race -tags e2e -count=1 ./..."
 
   vulncheck:
-    runs-on: ubuntu-24.04
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: "golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f"  # v1.1.0
         with:
-          go-version: "${{ env.GO_VERSION }}"
-      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
-      - run: govulncheck ./... || echo non-blocking-govulncheck-found-issues
+          go-version-file: "go.mod"
 
-  brew:
-    strategy:
-      matrix:
-        os: [macos-13, macos-15]
-    runs-on: ${{ matrix.os }}
+  packages:
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
         with:
-          go-version: "${{ env.GO_VERSION }}"
-      - name: Build binary
-        run: CGO_ENABLED=0 go build -o /tmp/watcher ./cmd/watcher/
-      - name: Verify binary
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: "actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"  # v7.0.0
+        with:
+          go-version-file: "go.mod"
+          cache: false
+      - uses: "anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c"  # v0.24.3
+      - name: "Build every archive and package, publish nothing"
+        uses: "goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de"  # v7.3.0
+        with:
+          version: "v2.18.3"
+          args: "release --snapshot --clean"
+      - name: "The .deb installs, and its binary runs"
         run: |
-          /tmp/watcher emit 2>&1 | grep -q usage
-          /tmp/watcher render 2>&1
-      - name: Test formula syntax
-        run: ruby -c Formula/agent-status.rb
+          sudo apt-get install -y ./dist/agent-status_*_amd64.deb
+          agent-status version
+          test -f /usr/lib/systemd/user/agent-status.service
+          test -f /usr/share/agent-status/agent-status.tmux

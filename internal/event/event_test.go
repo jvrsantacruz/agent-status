@@ -57,7 +57,7 @@ func TestEventExtendedMessage(t *testing.T) {
 	data, err := json.Marshal(e)
 	require.NoError(t, err)
 	var out Event
-	json.Unmarshal(data, &out)
+	require.NoError(t, json.Unmarshal(data, &out))
 	assert.Equal(t, e.Message, out.Message)
 }
 

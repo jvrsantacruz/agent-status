@@ -1,0 +1,100 @@
+---
+# Checks before a commit, on its message, and before a push. Install once per
+# checkout: `pre-commit install` (or `prek install`). CI runs every check on
+# every file, so skipping them here moves the failure to CI, not past it.
+default_install_hook_types:
+  - "pre-commit"
+  - "commit-msg"
+  - "pre-push"
+default_stages:
+  - "pre-commit"
+# Generated, and third-party text kept as its authors wrote it.
+exclude: "^(LICENSE|THIRD_PARTY_LICENSES)$"
+
+repos:
+  - repo: "https://github.com/pre-commit/pre-commit-hooks"
+    rev: "3e8a8703264a2f4a69428a0aa4dcb512790b2c8c"  # frozen: v6.0.0
+    hooks:
+      - id: "check-added-large-files"
+        args:
+          - "--maxkb=500"
+      - id: "check-executables-have-shebangs"
+      - id: "check-merge-conflict"
+      - id: "check-yaml"
+      - id: "detect-private-key"
+      - id: "end-of-file-fixer"
+      - id: "trailing-whitespace"
+
+  - repo: "https://github.com/gitleaks/gitleaks"
+    rev: "2ca41cc1372d1e939a6a879f18cdc19fc1cac1ce"  # frozen: v8.30.0
+    hooks:
+      - id: "gitleaks"
+
+  - repo: "https://github.com/rhysd/actionlint"
+    rev: "914e7df21a07ef503a81201c76d2b11c789d3fca"  # frozen: v1.7.12
+    hooks:
+      - id: "actionlint"
+
+  - repo: "https://github.com/zizmorcore/zizmor-pre-commit"
+    rev: "fa412071e4f5d44d44f9e365f4676f9df92456a2"  # frozen: v1.30.1
+    hooks:
+      - id: "zizmor"
+
+  - repo: "https://github.com/golangci/golangci-lint"
+    rev: "114493f9b3e7257d29e4130f2b4a4aadefbb6845"  # frozen: v2.14.0
+    hooks:
+      - id: "golangci-lint-full"
+
+  - repo: "local"
+    hooks:
+      - id: "private-words"
+        name: "private words"
+        entry: "tools/hooks/private-words"
+        language: "script"
+        types:
+          - "text"
+      - id: "build-output"
+        name: "no build output"
+        entry: "build output is made by goreleaser, never committed"
+        language: "fail"
+        files: "(^|/)dist/"
+      - id: "shellcheck"
+        name: "shellcheck"
+        entry: "shellcheck"
+        language: "system"
+        types:
+          - "shell"
+      - id: "go-mod-tidy"
+        name: "go.mod and go.sum are tidy"
+        entry: "go mod tidy -diff"
+        language: "system"
+        files: "(\\.go|go\\.mod|go\\.sum)$"
+        pass_filenames: false
+      - id: "third-party-licenses"
+        name: "THIRD_PARTY_LICENSES matches go.mod"
+        entry: "sh -c 'tools/third-party-licenses | diff -u THIRD_PARTY_LICENSES -'"
+        language: "system"
+        files: "(go\\.mod|go\\.sum|THIRD_PARTY_LICENSES|tools/third-party-licenses)$"
+        pass_filenames: false
+      - id: "commit-msg"
+        name: "no AI attribution, no private words"
+        entry: "tools/hooks/commit-msg"
+        language: "script"
+        stages:
+          - "commit-msg"
+      - id: "tests"
+        name: "unit and end to end tests"
+        entry: "go test -race -tags e2e ./..."
+        language: "system"
+        pass_filenames: false
+        always_run: true
+        stages:
+          - "pre-push"
+      - id: "changelog"
+        name: "version tags match CHANGELOG.md"
+        entry: "tools/hooks/pre-push-tags"
+        language: "script"
+        pass_filenames: false
+        always_run: true
+        stages:
+          - "pre-push"

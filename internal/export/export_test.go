@@ -69,7 +69,7 @@ func TestWriteDeadSince(t *testing.T) {
 			DeadSince *int64 `json:"dead_since"`
 		} `json:"sessions"`
 	}
-	json.Unmarshal(data, &out)
+	require.NoError(t, json.Unmarshal(data, &out))
 	require.NotNil(t, out.Sessions["s1"].DeadSince)
 	assert.Equal(t, ms, *out.Sessions["s1"].DeadSince)
 }
@@ -90,7 +90,7 @@ func TestWriteDeadSinceNull(t *testing.T) {
 			DeadSince *int64 `json:"dead_since"`
 		} `json:"sessions"`
 	}
-	json.Unmarshal(data, &out)
+	require.NoError(t, json.Unmarshal(data, &out))
 	assert.Nil(t, out.Sessions["s1"].DeadSince)
 }
 
@@ -136,7 +136,7 @@ func TestWriteOverwrites(t *testing.T) {
 	var out struct {
 		Sessions map[string]state.Session `json:"sessions"`
 	}
-	json.Unmarshal(data, &out)
+	require.NoError(t, json.Unmarshal(data, &out))
 	_, hasOld := out.Sessions["s1"]
 	_, hasNew := out.Sessions["s2"]
 	assert.False(t, hasOld, "old session should be gone")

@@ -1,5 +1,3 @@
-/tmp/
-/watcher
-/tmp/watcher-dbg
-/tmp/test-*
+/dist/
+/agent-status
 *.test

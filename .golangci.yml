@@ -1,0 +1,25 @@
+---
+version: "2"
+linters:
+  default: "standard"
+  enable:
+    - "errorlint"
+    - "misspell"
+    - "unconvert"
+  settings:
+    errcheck:
+      # Writes to the terminal, and closes on cleanup paths, where nothing
+      # useful can be done with the error.
+      exclude-functions:
+        - "fmt.Fprint"
+        - "fmt.Fprintf"
+        - "fmt.Fprintln"
+        - "os.RemoveAll"
+        - "(*os.File).Close"
+        - "(*os.Process).Kill"
+        - "(*database/sql.DB).Close"
+        - "(*database/sql.Rows).Close"
+        - "(*github.com/jvrsantacruz/agent-status/internal/store.Store).Close"
+formatters:
+  enable:
+    - "gofmt"
