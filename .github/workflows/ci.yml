@@ -26,6 +26,9 @@ jobs:
         with:
           go-version-file: "go.mod"
       - uses: "astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7"  # v10.2.0
+        with:
+          # Only runs pre-commit; no Python lockfile to key a cache on.
+          enable-cache: false
       - name: "Every pre-commit check, on every file"
         run: "uvx --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure"
 
