@@ -1,0 +1,4 @@
+# Go links statically by design: one binary with no runtime libraries to track.
+agent-status: statically-linked-binary [usr/bin/agent-status]
+# The Go runtime embeds larger words ("element", "canceled") that contain it.
+agent-status: spelling-error-in-binary ment meant [usr/bin/agent-status]

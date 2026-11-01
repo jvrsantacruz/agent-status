@@ -33,6 +33,8 @@ tools/third-party-licenses > THIRD_PARTY_LICENSES   # after any change to go.mod
 - The event JSON (README "Event format") and the `state.json` fields are a public contract.
   Adding a field is fine; renaming or removing one is a breaking change and needs a CHANGELOG entry.
 - `emit` must never block and never exit 2: it runs inside agent hooks.
+- An event line is at most 512 bytes (`event.MaxLine`), the `PIPE_BUF` of macOS: longer writes to a
+  FIFO are not atomic and interleave. Test FIFO changes on macOS too; CI does.
 - `render` prints nothing on any error: its output is the tmux status line. Errors belong in
   `doctor` and the daemon log.
 - The daemon logs one wide event per unit of work, not scattered lines.

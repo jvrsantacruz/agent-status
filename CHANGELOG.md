@@ -11,6 +11,11 @@ The first release with installable files. 0.1.0 was tagged, but never built.
 - On macOS, `emit` and the daemon use the same FIFO. Before, `emit` wrote to `/tmp`.
 - No event is lost when two arrive close together. Before, after each writer closed, the FIFO had
   no reader until the daemon reopened it, and an event sent then was dropped.
+- On macOS, events from several agents at once no longer corrupt each other. Each line now fits in
+  512 bytes, the size macOS writes to a FIFO in one piece; a longer message is cut and ends in
+  `...`. Before, lines up to about 1200 bytes could be split and mixed.
+- `emit` gives up after 1 second if the daemon stops reading, instead of waiting for ever inside
+  an agent hook.
 - Any agent can emit: `--session`, `--harness`, `--pid`, `--pane`. The `end` state removes a
   session at once. `emit` never exits 2, which would block a Claude Code hook.
 - The binary is `agent-status`, not `watcher`. The daemon starts with `agent-status daemon`; no

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -240,4 +241,49 @@ func TestDoctorWithoutDaemonFails(t *testing.T) {
 	out, _ := cmd.CombinedOutput()
 	assert.Equal(t, 1, cmd.ProcessState.ExitCode())
 	assert.Contains(t, string(out), "FAIL  daemon")
+}
+
+// Lines longer than PIPE_BUF (512 on macOS) can be split and interleave with
+// another writer's line, and both events are lost. emit keeps every line
+// within 512 bytes, so concurrent agents never corrupt each other.
+func TestConcurrentEmitsWithLongMessages(t *testing.T) {
+	dir := t.TempDir()
+	env := cleanEnv(dir)
+	daemon := command(dir, env, "daemon")
+	require.NoError(t, daemon.Start())
+	t.Cleanup(func() { daemon.Process.Kill() })
+	waitReader(filepath.Join(dir, "in.fifo"))
+
+	const writers = 40
+	msg := strings.Repeat(`long "quoted" <text> ñ😀 `, 100)
+	var wg sync.WaitGroup
+	for i := range writers {
+		wg.Go(func() {
+			out, err := command(dir, env, "emit", "--session", "s"+strconv.Itoa(i),
+				"--pid", strconv.Itoa(os.Getpid()), "--pane", "%1", "working", msg).CombinedOutput()
+			assert.NoError(t, err, string(out))
+			assert.Empty(t, string(out))
+		})
+	}
+	wg.Wait()
+
+	var sf export.StateFile
+	assert.Eventually(t, func() bool {
+		var err error
+		sf, err = export.Read(filepath.Join(dir, "state.json"))
+		return err == nil && sf.Daemon.EventsTotal == writers
+	}, 3*time.Second, 50*time.Millisecond)
+	assert.Zero(t, sf.Daemon.EventsRejected)
+	assert.Len(t, sf.Sessions, writers)
+	for _, s := range sf.Sessions {
+		assert.True(t, strings.HasSuffix(s.Message, "..."))
+	}
+}
+
+func TestEmitTooLongSessionExitsOne(t *testing.T) {
+	dir := t.TempDir()
+	cmd := command(dir, cleanEnv(dir), "emit", "--session", strings.Repeat("s", 600), "working")
+	out, _ := cmd.CombinedOutput()
+	assert.Equal(t, 1, cmd.ProcessState.ExitCode())
+	assert.Contains(t, string(out), "longer than 512 bytes")
 }

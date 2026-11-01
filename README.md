@@ -90,7 +90,9 @@ other program ------------------------+--> FIFO --> agent-status daemon
 ## Event format
 
 Any program can write events, with `agent-status emit` or by writing JSON lines to the FIFO
-itself (`$XDG_RUNTIME_DIR/agent-status/in.fifo`, or `in.fifo` in the state directory).
+itself (`$XDG_RUNTIME_DIR/agent-status/in.fifo`, or `in.fifo` in the state directory). Keep each
+line within 512 bytes, newline included: a FIFO write is atomic only up to `PIPE_BUF`, which is 512
+on macOS, and a longer line can interleave with another agent's line.
 
 ```sh
 agent-status emit [--session ID] [--harness NAME] [--pid PID] [--pane PANE] <state> [message]
@@ -104,7 +106,7 @@ agent-status emit [--session ID] [--harness NAME] [--pid PID] [--pane PANE] <sta
 | `pid` | `--pid` | `$AGENT_STATUS_PID`, `$CLAUDE_PID`, then the parent process | Agent process; the session dies with it |
 | `tmux_pane` | `--pane` | `$TMUX_PANE` | Pane of the agent, such as `%3` |
 | `ts` | | now | Milliseconds since the epoch |
-| `message` | `[message]` | | Free text, shown in `state.json`, at most 1024 bytes |
+| `message` | `[message]` | | Free text, shown in `state.json`; cut, ending in `...`, so the line fits 512 bytes |
 
 `emit` exits 1 on a usage error and never exits 2, because a Claude Code hook that exits 2 blocks
 the agent.

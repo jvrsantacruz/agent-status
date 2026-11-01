@@ -11,13 +11,13 @@ import (
 	"os"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/jvrsantacruz/agent-status/internal/event"
 )
 
-// maxMessage keeps one event line under PIPE_BUF (4096), so concurrent
-// writers never interleave on the FIFO.
-const maxMessage = 1024
+// writeWait bounds how long emit waits on a full FIFO.
+const writeWait = time.Second
 
 var states = map[string]bool{"working": true, "question": true, "idle": true, "error": true, "end": true}
 
@@ -52,10 +52,6 @@ func runEmit(args []string, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "agent-status emit: no session id: pass --session or set AGENT_STATUS_SESSION")
 		return 1
 	}
-	msg := fs.Arg(1)
-	if len(msg) > maxMessage {
-		msg = msg[:maxMessage]
-	}
 	e := event.Event{
 		SessionID:   *session,
 		Harness:     *harness,
@@ -63,10 +59,13 @@ func runEmit(args []string, stderr io.Writer) int {
 		PID:         *pid,
 		Pane:        *pane,
 		TimestampMs: clock().UnixMilli(),
-		Message:     msg,
+		Message:     fs.Arg(1),
 	}
 	if err := send(e); err != nil {
 		fmt.Fprintf(stderr, "agent-status emit: %v\n", err)
+		if errors.Is(err, event.ErrTooLong) {
+			return 1
+		}
 	}
 	return 0
 }
@@ -85,7 +84,14 @@ func send(e event.Event) error {
 		return fmt.Errorf("open %s: %w", fifoPath(), err)
 	}
 	defer f.Close()
+	// On Linux Go polls the FIFO, and a write to a full FIFO would wait
+	// for ever inside an agent hook. On macOS Go cannot poll a FIFO, the
+	// write fails at once with EAGAIN and the deadline is not supported.
+	_ = f.SetWriteDeadline(clock().Add(writeWait))
 	if _, err := f.Write(data); err != nil {
+		if errors.Is(err, syscall.EAGAIN) || errors.Is(err, os.ErrDeadlineExceeded) {
+			return fmt.Errorf("FIFO %s full, the daemon is not reading; run agent-status doctor", fifoPath())
+		}
 		return fmt.Errorf("write %s: %w", fifoPath(), err)
 	}
 	return nil

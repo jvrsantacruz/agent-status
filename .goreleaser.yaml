@@ -42,11 +42,32 @@ nfpms:
   - package_name: "agent-status"
     homepage: "https://github.com/jvrsantacruz/agent-status"
     maintainer: "Javier Santacruz <javier.santacruz.lc@gmail.com>"
-    description: "Shows in the tmux window list which AI coding agent is working or waiting"
+    description: |
+      Shows AI agent state in the tmux window list
+      One marker per tmux window, from agent state events. Any agent
+      that can run a command on a state change reports through
+      agent-status emit: Claude Code hooks, pi extensions, any other
+      program.
     license: "GPL-3.0-or-later"
     section: "utils"
     formats: ["deb", "rpm"]
     contents:
+      - src: "packaging/agent-status.1.gz"
+        dst: "/usr/share/man/man1/agent-status.1.gz"
+        file_info:
+          mode: 0o644
+      - src: "packaging/copyright"
+        dst: "/usr/share/doc/agent-status/copyright"
+        file_info:
+          mode: 0o644
+      - src: "packaging/changelog.Debian.gz"
+        dst: "/usr/share/doc/agent-status/changelog.Debian.gz"
+        file_info:
+          mode: 0o644
+      - src: "packaging/lintian-overrides"
+        dst: "/usr/share/lintian/overrides/agent-status"
+        file_info:
+          mode: 0o644
       - src: "packaging/agent-status.service"
         dst: "/usr/lib/systemd/user/agent-status.service"
         file_info:
@@ -63,10 +84,6 @@ nfpms:
         dst: "/usr/share/doc/agent-status/examples/agent-status-wrap"
         file_info:
           mode: 0o755
-      - src: "LICENSE"
-        dst: "/usr/share/doc/agent-status/copyright"
-        file_info:
-          mode: 0o644
       - src: "THIRD_PARTY_LICENSES"
         dst: "/usr/share/doc/agent-status/THIRD_PARTY_LICENSES"
         file_info:

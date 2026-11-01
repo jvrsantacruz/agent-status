@@ -83,3 +83,5 @@ jobs:
           agent-status version
           test -f /usr/lib/systemd/user/agent-status.service
           test -f /usr/share/agent-status/agent-status.tmux
+      - name: "The deb battery: full lifecycle and maintainer-script failure paths"
+        run: "tools/deb-battery.sh --docker ubuntu:24.04 --docker ubuntu:26.04 dist/agent-status_*_amd64.deb"
