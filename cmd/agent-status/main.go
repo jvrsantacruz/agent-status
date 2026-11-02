@@ -24,7 +24,8 @@ const usage = `usage: agent-status <command> [arguments]
 
 commands:
   daemon                          read events, keep state, write state.json
-  emit [flags] <state> [message]  send one event: working, question, idle, error, end
+  emit [flags] <state> [message]  send one event: working, question, idle, error, end;
+                                  --claude-hook inside a Claude Code hook
   render <pane>                   print the tmux marker for a pane id, such as %3
   doctor                          check the installation end to end
   version                         print version, commit and platform
@@ -34,10 +35,10 @@ https://github.com/jvrsantacruz/agent-status
 `
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprint(stderr, usage)
 		return 2
@@ -46,7 +47,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "daemon":
 		return runDaemon()
 	case "emit":
-		return runEmit(args[1:], stderr)
+		return runEmit(args[1:], stdin, stderr)
 	case "render":
 		return runRender(args[1:], stdout)
 	case "doctor":

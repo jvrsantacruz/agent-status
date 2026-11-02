@@ -287,3 +287,43 @@ func TestEmitTooLongSessionExitsOne(t *testing.T) {
 	assert.Equal(t, 1, cmd.ProcessState.ExitCode())
 	assert.Contains(t, string(out), "longer than 512 bytes")
 }
+
+func TestEmitClaudeHook(t *testing.T) {
+	dir := t.TempDir()
+	fifo := filepath.Join(dir, "in.fifo")
+	cases := []struct {
+		name, stdin, wantSession, wantMessage string
+		args                                  []string
+		wantStderr                            string
+	}{
+		{"session and message from stdin",
+			`{"session_id":"from-stdin","hook_event_name":"Notification","message":"Claude needs your permission"}`,
+			"from-stdin", "Claude needs your permission", []string{"question"}, ""},
+		{"--session and the message argument win",
+			`{"session_id":"from-stdin","hook_event_name":"PreToolUse","tool_name":"Bash"}`,
+			"from-flag", "my text", []string{"--session", "from-flag", "working", "my text"}, ""},
+		{"bad input still emits, from the environment",
+			`not json`, "from-env", "", []string{"working"}, "parse hook input"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			os.Remove(fifo)
+			ch := readOne(t, fifo)
+			waitReader(fifo)
+			args := append([]string{"emit", "--claude-hook"}, c.args...)
+			cmd := command(dir, cleanEnv(dir, "CLAUDE_CODE_SESSION_ID=from-env", "CLAUDE_PID=7"), args...)
+			cmd.Stdin = strings.NewReader(c.stdin)
+			out, err := cmd.CombinedOutput()
+			require.NoError(t, err, string(out))
+			if c.wantStderr == "" {
+				assert.Empty(t, string(out))
+			} else {
+				assert.Contains(t, string(out), c.wantStderr)
+			}
+			m := emitted(t, ch)
+			assert.Equal(t, c.wantSession, m["session_id"])
+			assert.Equal(t, c.wantMessage, m["message"])
+			assert.Equal(t, "claude", m["harness"])
+		})
+	}
+}

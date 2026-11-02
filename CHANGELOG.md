@@ -29,3 +29,7 @@ The first release with installable files. 0.1.0 was tagged, but never built.
 - The repository is the TPM plugin: `set -g @plugin 'jvrsantacruz/agent-status'`. It puts the
   marker in front of your window format instead of replacing it.
 - Licence: GPL-3.0-or-later, before MIT.
+- `emit --claude-hook` reads Claude Code's hook input: the session id, and a message such as
+  "Claude needs your permission" or the tool name. The example hooks use it, and add
+  `PermissionRequest`, so question shows as the permission prompt appears instead of 6 seconds
+  later, and `PostToolUse`, so the state goes back to working after you approve a tool.

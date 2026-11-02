@@ -1,10 +1,12 @@
 {
   "hooks": {
-    "SessionStart": [{"hooks": [{"type": "command", "command": "agent-status emit idle"}]}],
-    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "agent-status emit working"}]}],
-    "PreToolUse": [{"hooks": [{"type": "command", "command": "agent-status emit working"}]}],
-    "Notification": [{"hooks": [{"type": "command", "command": "agent-status emit question"}]}],
-    "Stop": [{"hooks": [{"type": "command", "command": "agent-status emit idle"}]}],
-    "SessionEnd": [{"hooks": [{"type": "command", "command": "agent-status emit end"}]}]
+    "SessionStart": [{"hooks": [{"type": "command", "command": "agent-status emit --claude-hook idle"}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "agent-status emit --claude-hook working"}]}],
+    "PreToolUse": [{"hooks": [{"type": "command", "command": "agent-status emit --claude-hook working"}]}],
+    "PermissionRequest": [{"hooks": [{"type": "command", "command": "agent-status emit --claude-hook question"}]}],
+    "PostToolUse": [{"hooks": [{"type": "command", "command": "agent-status emit --claude-hook working"}]}],
+    "Notification": [{"hooks": [{"type": "command", "command": "agent-status emit --claude-hook question"}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "agent-status emit --claude-hook idle"}]}],
+    "SessionEnd": [{"hooks": [{"type": "command", "command": "agent-status emit --claude-hook end"}]}]
   }
 }

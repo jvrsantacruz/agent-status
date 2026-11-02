@@ -95,8 +95,13 @@ line within 512 bytes, newline included: a FIFO write is atomic only up to `PIPE
 on macOS, and a longer line can interleave with another agent's line.
 
 ```sh
-agent-status emit [--session ID] [--harness NAME] [--pid PID] [--pane PANE] <state> [message]
+agent-status emit [--session ID] [--harness NAME] [--pid PID] [--pane PANE] [--claude-hook] <state> [message]
 ```
+
+Inside a Claude Code hook, `--claude-hook` reads the JSON Claude gives the hook on stdin: the
+session id, and a message from the notification text ("Claude needs your permission") or the tool
+name ("Bash", "permission: Bash"). It never takes the prompt or a tool's input, which can hold
+private text. Bad input is reported on stderr and the event is still sent.
 
 | Field | Flag | Default | Meaning |
 |---|---|---|---|
@@ -115,9 +120,25 @@ the agent.
 
 | Agent | How |
 |---|---|
-| Claude Code | [examples/claude-hooks.json](examples/claude-hooks.json): hooks set working, question, idle, end |
+| Claude Code | [examples/claude-hooks.json](examples/claude-hooks.json): eight hooks, below |
 | pi | an extension that runs `agent-status emit --harness pi --session <id> <state>` on its events |
 | Any command | [examples/agent-status-wrap](examples/agent-status-wrap): `agent-status-wrap aider ...` shows working while it runs and error if it fails |
+
+Claude Code hooks in the example, and what each shows:
+
+| Hook | State | Message |
+|---|---|---|
+| `SessionStart` | idle | |
+| `UserPromptSubmit` | working | |
+| `PreToolUse` | working | tool name |
+| `PermissionRequest` | question, as the prompt appears | `permission: <tool>` |
+| `PostToolUse` | working, after an approved tool | tool name |
+| `Notification` | question, about 6 s after Claude starts waiting | Claude's text |
+| `Stop` | idle | |
+| `SessionEnd` | session removed | |
+
+Claude has no hook for the moment you approve a tool, so a long tool you approved shows question
+until it finishes.
 
 ## Configuration
 

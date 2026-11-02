@@ -24,7 +24,7 @@ var states = map[string]bool{"working": true, "question": true, "idle": true, "e
 // runEmit never exits 2: a Claude Code hook that exits 2 blocks the agent.
 // A daemon that is not running is reported on stderr with exit 0, so the
 // agent carries on.
-func runEmit(args []string, stderr io.Writer) int {
+func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 	fs := flag.NewFlagSet("emit", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	session := fs.String("session", firstEnv("AGENT_STATUS_SESSION", "CLAUDE_CODE_SESSION_ID"),
@@ -34,6 +34,8 @@ func runEmit(args []string, stderr io.Writer) int {
 	pid := fs.Int("pid", defaultPID(),
 		"pid of the agent, the session is dropped when it exits; from $AGENT_STATUS_PID, then $CLAUDE_PID, then the parent process")
 	pane := fs.String("pane", os.Getenv("TMUX_PANE"), "tmux pane id of the agent; from $TMUX_PANE")
+	hook := fs.Bool("claude-hook", false,
+		"read the JSON Claude Code gives a hook on stdin: session id, and a message from the notification text or the tool name")
 	fs.Usage = func() {
 		fmt.Fprintln(stderr, "usage: agent-status emit [flags] <working|question|idle|error|end> [message]")
 		fs.PrintDefaults()
@@ -48,6 +50,21 @@ func runEmit(args []string, stderr io.Writer) int {
 		fs.Usage()
 		return 1
 	}
+	msg := fs.Arg(1)
+	if *hook {
+		// A hook must never fail the agent: bad input is reported and the
+		// event goes out with what the flags and environment give.
+		h, err := readClaudeHook(stdin)
+		if err != nil {
+			fmt.Fprintf(stderr, "agent-status emit: %v\n", err)
+		}
+		if h.SessionID != "" && !flagSet(fs, "session") {
+			*session = h.SessionID
+		}
+		if msg == "" {
+			msg = h.message()
+		}
+	}
 	if *session == "" {
 		fmt.Fprintln(stderr, "agent-status emit: no session id: pass --session or set AGENT_STATUS_SESSION")
 		return 1
@@ -59,7 +76,7 @@ func runEmit(args []string, stderr io.Writer) int {
 		PID:         *pid,
 		Pane:        *pane,
 		TimestampMs: clock().UnixMilli(),
-		Message:     fs.Arg(1),
+		Message:     msg,
 	}
 	if err := send(e); err != nil {
 		fmt.Fprintf(stderr, "agent-status emit: %v\n", err)
@@ -95,6 +112,12 @@ func send(e event.Event) error {
 		return fmt.Errorf("write %s: %w", fifoPath(), err)
 	}
 	return nil
+}
+
+func flagSet(fs *flag.FlagSet, name string) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) { set = set || f.Name == name })
+	return set
 }
 
 func firstEnv(keys ...string) string {
