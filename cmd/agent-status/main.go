@@ -76,7 +76,9 @@ func buildVersion() string {
 
 // versionLine is what a bug report needs: version, commit, commit date, toolchain, platform.
 func versionLine() string {
-	rev, at := "unknown", "unknown"
+	// go install builds carry no VCS data; their pseudo-version already
+	// holds the commit and its date.
+	rev, at := "", ""
 	if bi, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range bi.Settings {
 			switch s.Key {
@@ -91,6 +93,10 @@ func versionLine() string {
 			}
 		}
 	}
-	return fmt.Sprintf("agent-status %s (%s, %s) %s %s/%s",
-		buildVersion(), rev, at, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	build := ""
+	if rev != "" {
+		build = fmt.Sprintf(" (%s, %s)", rev, at)
+	}
+	return fmt.Sprintf("agent-status %s%s %s %s/%s",
+		buildVersion(), build, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }

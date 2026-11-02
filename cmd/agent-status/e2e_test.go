@@ -167,7 +167,8 @@ func TestUnknownCommandIsUsageError(t *testing.T) {
 func TestVersion(t *testing.T) {
 	out, err := exec.Command(bin, "--version").Output()
 	require.NoError(t, err)
-	assert.Regexp(t, `^agent-status \S+ \(\S+, \S+\) go1\.\d+`, string(out))
+	assert.Regexp(t, `^agent-status \S+ (\([0-9a-f]+(\+dirty)?, \S+\) )?go1\.\d+`, string(out))
+	assert.NotContains(t, string(out), "unknown")
 }
 
 func TestRender(t *testing.T) {
