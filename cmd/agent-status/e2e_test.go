@@ -54,26 +54,18 @@ func command(dir string, env []string, args ...string) *exec.Cmd {
 	return cmd
 }
 
-// readOne reads one line from a FIFO opened before the writer runs.
+// readOne reads one line from a FIFO. It opens the FIFO read-write before it
+// returns, as the daemon does, so a writer always finds a reader.
 func readOne(t *testing.T, fifo string) <-chan string {
 	t.Helper()
 	require.NoError(t, syscall.Mkfifo(fifo, 0o600))
+	f, err := os.OpenFile(fifo, os.O_RDWR, 0)
+	require.NoError(t, err)
+	t.Cleanup(func() { f.Close() })
 	ch := make(chan string, 1)
 	go func() {
-		// A writer that closes without writing, as waitReader does, gives
-		// an empty read: reopen and wait for a real line.
-		for {
-			f, err := os.OpenFile(fifo, os.O_RDONLY, 0)
-			if err != nil {
-				return
-			}
-			line, _ := bufio.NewReader(f).ReadString('\n')
-			f.Close()
-			if line != "" {
-				ch <- line
-				return
-			}
-		}
+		line, _ := bufio.NewReader(f).ReadString('\n')
+		ch <- line
 	}()
 	return ch
 }
@@ -104,13 +96,13 @@ func waitReader(fifo string) {
 func TestEmitFromClaudeHookEnv(t *testing.T) {
 	dir := t.TempDir()
 	ch := readOne(t, filepath.Join(dir, "in.fifo"))
-	waitReader(filepath.Join(dir, "in.fifo"))
 
 	// What a Claude Code hook sees: tmux sets TMUX_PANE, Claude sets the
 	// session and its own pid. tmux does not set a session name.
 	env := cleanEnv(dir, "CLAUDE_CODE_SESSION_ID=abc", "CLAUDE_PID=4242", "TMUX_PANE=%7")
 	out, err := command(dir, env, "emit", "question", `say "hi"`).CombinedOutput()
 	require.NoError(t, err, string(out))
+	require.Empty(t, string(out))
 
 	m := emitted(t, ch)
 	assert.Equal(t, "abc", m["session_id"])
@@ -124,11 +116,11 @@ func TestEmitFromClaudeHookEnv(t *testing.T) {
 func TestEmitFlagsForAnyAgent(t *testing.T) {
 	dir := t.TempDir()
 	ch := readOne(t, filepath.Join(dir, "in.fifo"))
-	waitReader(filepath.Join(dir, "in.fifo"))
 
 	out, err := command(dir, cleanEnv(dir), "emit", "--session", "s9", "--harness", "aider",
 		"--pid", "77", "--pane", "%2", "working").CombinedOutput()
 	require.NoError(t, err, string(out))
+	require.Empty(t, string(out))
 
 	m := emitted(t, ch)
 	assert.Equal(t, "s9", m["session_id"])
@@ -290,8 +282,6 @@ func TestEmitTooLongSessionExitsOne(t *testing.T) {
 }
 
 func TestEmitClaudeHook(t *testing.T) {
-	dir := t.TempDir()
-	fifo := filepath.Join(dir, "in.fifo")
 	cases := []struct {
 		name, stdin, wantSession, wantMessage string
 		args                                  []string
@@ -308,9 +298,8 @@ func TestEmitClaudeHook(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			os.Remove(fifo)
-			ch := readOne(t, fifo)
-			waitReader(fifo)
+			dir := t.TempDir()
+			ch := readOne(t, filepath.Join(dir, "in.fifo"))
 			args := append([]string{"emit", "--claude-hook"}, c.args...)
 			cmd := command(dir, cleanEnv(dir, "CLAUDE_CODE_SESSION_ID=from-env", "CLAUDE_PID=7"), args...)
 			cmd.Stdin = strings.NewReader(c.stdin)
