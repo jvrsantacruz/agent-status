@@ -57,6 +57,11 @@ func runDoctor(w io.Writer) int {
 
 	roundTrip(check)
 	wiring(report, check)
+	// Read again: the round trip went through the FIFO after every event
+	// sent before doctor started, so all of them are in by now.
+	if fresh, err := export.Read(statePath()); err == nil {
+		sf = fresh
+	}
 	sessions(w, report, sf)
 
 	if failed {
