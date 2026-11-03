@@ -124,6 +124,8 @@ release:
   # Published by the workflow after the attestation, so the release is
   # complete before anyone can download from it.
   draft: true
+  # A rerun after a failure replaces its own draft instead of adding another.
+  replace_existing_draft: true
   footer: |
     Verify a download:
       sha256sum --check --ignore-missing checksums.txt
