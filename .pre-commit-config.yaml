@@ -8,8 +8,9 @@ default_install_hook_types:
   - "pre-push"
 default_stages:
   - "pre-commit"
-# Generated, and third-party text kept as its authors wrote it.
-exclude: "^(LICENSE|THIRD_PARTY_LICENSES)$"
+# Generated, and third-party text kept as its authors wrote it. The release
+# workflow writes Formula/.
+exclude: "^(LICENSE|THIRD_PARTY_LICENSES|Formula/.*)$"
 
 repos:
   - repo: "https://github.com/pre-commit/pre-commit-hooks"

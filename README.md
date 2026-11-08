@@ -29,7 +29,8 @@ systemctl --user enable --now agent-status
 macOS, with Homebrew:
 
 ```sh
-brew install jvrsantacruz/tap/agent-status
+brew tap jvrsantacruz/agent-status https://github.com/jvrsantacruz/agent-status
+brew install jvrsantacruz/agent-status/agent-status
 brew services start agent-status
 ```
 

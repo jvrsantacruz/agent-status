@@ -92,12 +92,20 @@ nfpms:
 # A formula, not a cask: `brew services` starts a formula's service block,
 # and a cask has none. GoReleaser deprecates `brews` for casks; until its v3
 # removes it, this is the one config that gives a background service.
+#
+# This repository is its own tap: the formula is committed to Formula/ here,
+# with the workflow's own token, so no credential for another repository.
 brews:
   - name: "agent-status"
     repository:
       owner: "jvrsantacruz"
-      name: "homebrew-tap"
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      name: "agent-status"
+      branch: "main"
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    commit_author:
+      name: "github-actions[bot]"
+      email: "41898282+github-actions[bot]@users.noreply.github.com"
+    commit_msg_template: "formula: agent-status {{ .Tag }}"
     directory: "Formula"
     homepage: "https://github.com/jvrsantacruz/agent-status"
     description: "Shows in the tmux window list which AI coding agent is working, waiting, or failed"

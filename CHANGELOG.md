@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1
+
+The first published release. Everything listed under 0.2.0 is in it: 0.2.0 was tagged, but its
+release stopped before publishing.
+
+- Homebrew: this repository is its own tap. Install with
+  `brew tap jvrsantacruz/agent-status https://github.com/jvrsantacruz/agent-status`, then
+  `brew install jvrsantacruz/agent-status/agent-status`.
+- `doctor` lists sessions as they are after its round trip, not from before it.
+
 ## 0.2.0
 
 The first release with installable files. 0.1.0 was tagged, but never built.
