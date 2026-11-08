@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.2
 
+- tmux: the marker goes after the window format's leading spaces, one space from the window name:
+  ` ▶ 1:api `. Before, it went in front of them, against the previous window and two spaces
+  from its name ([#2](https://github.com/jvrsantacruz/agent-status/issues/2)).
 - Claude Code: the example has two more hooks. `StopFailure` shows error when an API error ends
   the turn, with its type such as `error: rate_limit`; before, the window showed working until
   Claude exited. `PostToolUseFailure` shows working after a tool fails; before, a failed tool

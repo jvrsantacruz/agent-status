@@ -34,11 +34,15 @@ set_default @agent_mark_dead '#[fg=colour8,dim]x #[default]'
 
 [ "$(tmux show-options -gqv @agent-status-auto-format)" = "off" ] && exit 0
 
+# After the format's leading spaces, so the marker is one space from the
+# window name and not against the previous window: " #I:#W " becomes
+# " ▶ #I:#W ".
 render="#($bin render '#{pane_id}')"
 for option in window-status-format window-status-current-format; do
 	current="$(tmux show-options -gqv "$option")"
+	lead="${current%%[! ]*}"
 	case "$current" in
 	*"render '#{pane_id}'"*) ;;
-	*) tmux set-option -g "$option" "$render$current" ;;
+	*) tmux set-option -g "$option" "$lead$render${current#"$lead"}" ;;
 	esac
 done

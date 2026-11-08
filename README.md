@@ -194,7 +194,7 @@ tmux options, set before TPM runs:
 | `@agent_mark_question` | `#[fg=colour3,bold]? #[default]` |
 | `@agent_mark_error` | `#[fg=colour1]✗ #[default]` |
 | `@agent_mark_dead` | `#[fg=colour8,dim]x #[default]` |
-| `@agent-status-auto-format` | `on`: the plugin puts the marker in front of `window-status-format` and `window-status-current-format`. `off`: add `#(agent-status render '#{pane_id}')` yourself |
+| `@agent-status-auto-format` | `on`: the plugin puts the marker at the start of `window-status-format` and `window-status-current-format`, after their leading spaces. `off`: add `#(agent-status render '#{pane_id}')` yourself |
 
 ## Troubleshooting
 
