@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.3
 
 - `state.json` has a schema, [schema/state.schema.json](schema/state.schema.json), and a
   `schema_version` field, 1. A test checks every file the daemon writes against it. Packages
