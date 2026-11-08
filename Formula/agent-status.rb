@@ -5,13 +5,13 @@
 class AgentStatus < Formula
   desc "Shows in the tmux window list which AI coding agent is working, waiting, or failed"
   homepage "https://github.com/jvrsantacruz/agent-status"
-  version "0.2.1"
+  version "0.2.2"
   license "GPL-3.0-or-later"
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/jvrsantacruz/agent-status/releases/download/v0.2.1/agent-status_0.2.1_darwin_amd64.tar.gz"
-      sha256 "f6b42bf07b7206b01d95557a2fa491406cbc46c8220c7a40f30801bb8604d735"
+      url "https://github.com/jvrsantacruz/agent-status/releases/download/v0.2.2/agent-status_0.2.2_darwin_amd64.tar.gz"
+      sha256 "e87196a71ec0869e07de7df6c7b10b78e85570d41d5d1815061b722e8295a34e"
 
       define_method(:install) do
         bin.install "agent-status"
@@ -19,8 +19,8 @@ class AgentStatus < Formula
       end
     end
     if Hardware::CPU.arm?
-      url "https://github.com/jvrsantacruz/agent-status/releases/download/v0.2.1/agent-status_0.2.1_darwin_arm64.tar.gz"
-      sha256 "88ed78578cdebef6dff9907d6a6b517a554bdeabfee2917aac9c8ad6e7aaf528"
+      url "https://github.com/jvrsantacruz/agent-status/releases/download/v0.2.2/agent-status_0.2.2_darwin_arm64.tar.gz"
+      sha256 "e71192bb9feda359dbb83177dbff71e4f1af0479bd09eed69980d000a551391b"
 
       define_method(:install) do
         bin.install "agent-status"
@@ -31,16 +31,16 @@ class AgentStatus < Formula
 
   on_linux do
     if Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
-      url "https://github.com/jvrsantacruz/agent-status/releases/download/v0.2.1/agent-status_0.2.1_linux_amd64.tar.gz"
-      sha256 "d6b099a2663ee196b27c2ac1e8c6f32ba2565869aac2c91019d833acf31794b8"
+      url "https://github.com/jvrsantacruz/agent-status/releases/download/v0.2.2/agent-status_0.2.2_linux_amd64.tar.gz"
+      sha256 "55de7ead757276e65e807a6334bd461139036c3170fe94616d40958ee2afe23b"
       define_method(:install) do
         bin.install "agent-status"
         pkgshare.install "agent-status.tmux", "examples"
       end
     end
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/jvrsantacruz/agent-status/releases/download/v0.2.1/agent-status_0.2.1_linux_arm64.tar.gz"
-      sha256 "a1f450f97544b4e26ed6d259d96941974357fb6bcdf4da6dffb3bc0654cf0f83"
+      url "https://github.com/jvrsantacruz/agent-status/releases/download/v0.2.2/agent-status_0.2.2_linux_arm64.tar.gz"
+      sha256 "df0cf257bd47d830f12917dcfb6761b4b167a55d061c3603c8181f4165a44178"
       define_method(:install) do
         bin.install "agent-status"
         pkgshare.install "agent-status.tmux", "examples"
