@@ -18,15 +18,31 @@ hooks, pi through an extension, any other program through `agent-status emit`.
 
 ## Install
 
-GNU/Linux, from the [latest release](https://github.com/jvrsantacruz/agent-status/releases/latest):
+### GNU/Linux: .deb or .rpm
+
+Download the package for your machine from the
+[latest release](https://github.com/jvrsantacruz/agent-status/releases/latest), check it, install
+it, and start the daemon as a user service:
 
 ```sh
-sudo apt install ./agent-status_*_amd64.deb      # Debian, Ubuntu
-sudo dnf install ./agent-status-*.x86_64.rpm     # Fedora
+v=$(basename "$(curl -sLo /dev/null -w '%{url_effective}' https://github.com/jvrsantacruz/agent-status/releases/latest)")
+arch=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+base=https://github.com/jvrsantacruz/agent-status/releases/download/$v
+curl -LO "$base/agent-status_${v#v}_linux_$arch.deb" -LO "$base/checksums.txt"   # or .rpm
+sha256sum --check --ignore-missing checksums.txt
+
+sudo apt install "./agent-status_${v#v}_linux_$arch.deb"     # Debian, Ubuntu
+sudo dnf install "./agent-status_${v#v}_linux_$arch.rpm"     # Fedora, if you downloaded the .rpm
 systemctl --user enable --now agent-status
 ```
 
-macOS, with Homebrew:
+The package installs `/usr/bin/agent-status`, the user unit
+`/usr/lib/systemd/user/agent-status.service`, the tmux plugin
+`/usr/share/agent-status/agent-status.tmux` and the examples in `/usr/share/doc/agent-status/`.
+
+### macOS: Homebrew
+
+This repository is its own tap:
 
 ```sh
 brew tap jvrsantacruz/agent-status https://github.com/jvrsantacruz/agent-status
@@ -34,20 +50,38 @@ brew install jvrsantacruz/agent-status/agent-status
 brew services start agent-status
 ```
 
-With Go 1.26 or later, on either system:
+The tmux plugin is in `$(brew --prefix)/share/agent-status/agent-status.tmux`.
+
+### Any system: archive or Go
+
+The release also has a `.tar.gz` per system (`linux` or `darwin`) and architecture (`amd64` or
+`arm64`), with the binary, the plugin, the user unit and the examples. Put `agent-status` in your
+`PATH` and run `agent-status daemon` from your own service manager.
+
+With Go 1.26 or later:
 
 ```sh
 go install github.com/jvrsantacruz/agent-status/cmd/agent-status@latest
-agent-status daemon &        # or a service of your own
 ```
 
-Each release lists SHA-256 checksums and a signed provenance record, which says which
-workflow built each file:
+### Check a download
+
+Each release lists SHA-256 checksums, as above, and a signed provenance record that says which
+GitHub workflow built each file:
 
 ```sh
-sha256sum --check --ignore-missing checksums.txt
 gh attestation verify --owner jvrsantacruz agent-status_*.tar.gz
 ```
+
+### Upgrade and remove
+
+| Installed with | Upgrade | Remove |
+|---|---|---|
+| .deb, .rpm | install the new package the same way, then `systemctl --user restart agent-status` | `systemctl --user disable --now agent-status`, then `sudo apt remove agent-status` or `sudo dnf remove agent-status` |
+| Homebrew | `brew upgrade agent-status`, then `brew services restart agent-status` | `brew services stop agent-status`, then `brew uninstall agent-status` and `brew untap jvrsantacruz/agent-status` |
+| Go | `go install` again | delete the binary from `$(go env GOPATH)/bin` |
+
+Removing the program keeps your data; the [Data](#data) section says where it is.
 
 ## Quickstart
 

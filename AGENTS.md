@@ -16,6 +16,29 @@ goreleaser release --snapshot --clean --skip=sbom   # build release archives and
 tools/third-party-licenses > THIRD_PARTY_LICENSES   # after any change to go.mod
 ```
 
+## Install
+
+To run what you changed, build it: `go build -o /tmp/agent-status ./cmd/agent-status`, then
+`AGENT_STATUS_STATE_DIR=/tmp/as AGENT_STATUS_RUNTIME_DIR=/tmp/as /tmp/agent-status daemon`, so
+it does not touch an installed daemon's state. Check it with `agent-status doctor`, using the same
+two variables.
+
+Users install a release: README "Install" has the commands per system (.deb or .rpm with a
+systemd user unit, Homebrew from this repository's own tap, an archive, or `go install`). When you
+change what a package installs or where, change that section too.
+
+## Release
+
+1. Move the changes in CHANGELOG.md under a new `## X.Y.Z` heading at the top. No `Unreleased`
+   section may remain; the release workflow refuses the tag otherwise.
+2. Commit, push, and wait for CI to pass on `main`.
+3. `git tag -s vX.Y.Z -m "agent-status X.Y.Z"` and `git push origin vX.Y.Z`. The workflow builds
+   every file, attests it, publishes the release, and commits `Formula/agent-status.rb` to `main`.
+4. `git pull`: the formula commit lands after your tag.
+
+Never edit `Formula/` by hand; the next release overwrites it. A published version is never
+rebuilt: fix forward with a new patch version.
+
 ## Layout
 
 | Path | What |
@@ -27,6 +50,9 @@ tools/third-party-licenses > THIRD_PARTY_LICENSES   # after any change to go.mod
 | `internal/export` | `state.json` read and write |
 | `agent-status.tmux` | TPM plugin |
 | `examples/` | Claude Code hooks, a generic wrapper emitter |
+| `packaging/` | systemd user unit for the .deb and .rpm |
+| `Formula/` | Homebrew formula, written by the release workflow |
+| `.goreleaser.yaml`, `.github/workflows/release.yml` | What a tag builds and publishes |
 
 ## Rules
 
