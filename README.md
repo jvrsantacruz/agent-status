@@ -135,8 +135,8 @@ agent-status emit [--session ID] [--harness NAME] [--pid PID] [--pane PANE] [--c
 
 Inside a Claude Code hook, `--claude-hook` reads the JSON Claude gives the hook on stdin: the
 session id, and a message from the notification text ("Claude needs your permission") or the tool
-name ("Bash", "permission: Bash"). It never takes the prompt or a tool's input, which can hold
-private text. Bad input is reported on stderr and the event is still sent.
+name ("Bash", "permission: Bash"), or the type of an API error ("error: rate_limit"). It never
+takes the prompt, a tool's input or an error's text, which can hold private text. Bad input is reported on stderr and the event is still sent.
 
 | Field | Flag | Default | Meaning |
 |---|---|---|---|
@@ -155,7 +155,7 @@ the agent.
 
 | Agent | How |
 |---|---|
-| Claude Code | [examples/claude-hooks.json](examples/claude-hooks.json): eight hooks, below |
+| Claude Code | [examples/claude-hooks.json](examples/claude-hooks.json): ten hooks, below |
 | pi | an extension that runs `agent-status emit --harness pi --session <id> <state>` on its events |
 | Any command | [examples/agent-status-wrap](examples/agent-status-wrap): `agent-status-wrap aider ...` shows working while it runs and error if it fails |
 
@@ -168,8 +168,10 @@ Claude Code hooks in the example, and what each shows:
 | `PreToolUse` | working | tool name |
 | `PermissionRequest` | question, as the prompt appears | `permission: <tool>` |
 | `PostToolUse` | working, after an approved tool | tool name |
+| `PostToolUseFailure` | working, after a tool fails; Claude goes on | tool name |
 | `Notification` | question, about 6 s after Claude starts waiting | Claude's text |
 | `Stop` | idle | |
+| `StopFailure` | error, when an API error ends the turn | `error: <type>`, such as `error: rate_limit` |
 | `SessionEnd` | session removed | |
 
 Claude has no hook for the moment you approve a tool, so a long tool you approved shows question

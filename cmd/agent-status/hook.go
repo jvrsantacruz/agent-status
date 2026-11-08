@@ -19,6 +19,7 @@ type claudeHook struct {
 	Event     string `json:"hook_event_name"`
 	Message   string `json:"message"`
 	ToolName  string `json:"tool_name"`
+	Error     string `json:"error"`
 }
 
 func readClaudeHook(r io.Reader) (claudeHook, error) {
@@ -34,8 +35,9 @@ func readClaudeHook(r io.Reader) (claudeHook, error) {
 }
 
 // message says what the agent is doing or asking, from the fields Claude
-// sends for that hook. It never takes the prompt or a tool's input, which
-// can hold private text; state.json shows only the tool's name.
+// sends for that hook. It never takes the prompt, a tool's input or an
+// error's text, which can hold private text; state.json shows only the
+// tool's name or the error's type, such as rate_limit.
 func (h claudeHook) message() string {
 	switch h.Event {
 	case "Notification":
@@ -44,8 +46,12 @@ func (h claudeHook) message() string {
 		if h.ToolName != "" {
 			return "permission: " + h.ToolName
 		}
-	case "PreToolUse", "PostToolUse":
+	case "PreToolUse", "PostToolUse", "PostToolUseFailure":
 		return h.ToolName
+	case "StopFailure":
+		if h.Error != "" {
+			return "error: " + h.Error
+		}
 	}
 	return ""
 }

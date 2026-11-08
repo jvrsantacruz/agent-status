@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Claude Code: the example has two more hooks. `StopFailure` shows error when an API error ends
+  the turn, with its type such as `error: rate_limit`; before, the window showed working until
+  Claude exited. `PostToolUseFailure` shows working after a tool fails; before, a failed tool
+  that needed approval left question until the next tool ran.
+
 ## 0.2.1
 
 The first published release. Everything listed under 0.2.0 is in it: 0.2.0 was tagged, but its

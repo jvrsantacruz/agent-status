@@ -21,6 +21,8 @@ func TestClaudeHookMessage(t *testing.T) {
 		"post tool":    {`{"session_id":"s","hook_event_name":"PostToolUse","tool_name":"Edit"}`, "Edit"},
 		"prompt":       {`{"session_id":"s","hook_event_name":"UserPromptSubmit","prompt":"my private question"}`, ""},
 		"stop":         {`{"session_id":"s","hook_event_name":"Stop"}`, ""},
+		"tool failure": {`{"session_id":"s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cat secret"},"error":"exit 1"}`, "Bash"},
+		"stop failure": {`{"session_id":"s","hook_event_name":"StopFailure","error":"rate_limit","error_details":"429 Too Many Requests","last_assistant_message":"API Error: Rate limit reached"}`, "error: rate_limit"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
