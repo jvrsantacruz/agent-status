@@ -51,6 +51,7 @@ rebuilt: fix forward with a new patch version.
 | `agent-status.tmux` | TPM plugin |
 | `examples/` | Claude Code hooks, a generic wrapper emitter |
 | `packaging/` | systemd user unit for the .deb and .rpm |
+| `schema/` | JSON Schema of `state.json`, the read side for other programs. Change it with any field of `export.StateFile` or `state.Session`; raise `export.SchemaVersion` when a field is removed or changes meaning. `internal/export/schema_test.go` holds the two together |
 | `Formula/` | Homebrew formula, written by the release workflow |
 | `.goreleaser.yaml`, `.github/workflows/release.yml` | What a tag builds and publishes |
 

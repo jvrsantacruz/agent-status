@@ -23,9 +23,14 @@ type Daemon struct {
 	EventsRejected int64  `json:"events_rejected"`
 }
 
+// SchemaVersion is the version of schema/state.schema.json that Write
+// produces. A new field keeps it; a removed or changed field raises it.
+const SchemaVersion = 1
+
 type StateFile struct {
-	Daemon   Daemon                   `json:"daemon"`
-	Sessions map[string]state.Session `json:"sessions"`
+	SchemaVersion int                      `json:"schema_version"`
+	Daemon        Daemon                   `json:"daemon"`
+	Sessions      map[string]state.Session `json:"sessions"`
 }
 
 // Read loads a state file.
@@ -48,6 +53,10 @@ func Write(path string, sf StateFile) error {
 		return fmt.Errorf("export mkdir: %w", err)
 	}
 
+	sf.SchemaVersion = SchemaVersion
+	if sf.Sessions == nil {
+		sf.Sessions = map[string]state.Session{}
+	}
 	data, err := json.MarshalIndent(sf, "", "  ")
 	if err != nil {
 		return fmt.Errorf("export marshal: %w", err)

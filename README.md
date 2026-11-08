@@ -38,7 +38,8 @@ systemctl --user enable --now agent-status
 
 The package installs `/usr/bin/agent-status`, the user unit
 `/usr/lib/systemd/user/agent-status.service`, the tmux plugin
-`/usr/share/agent-status/agent-status.tmux` and the examples in `/usr/share/doc/agent-status/`.
+`/usr/share/agent-status/agent-status.tmux`, the [state.json](#data) schema
+`/usr/share/agent-status/state.schema.json` and the examples in `/usr/share/doc/agent-status/`.
 
 ### macOS: Homebrew
 
@@ -221,6 +222,11 @@ Everything stays on your machine, readable by you alone (directories 0700, files
 |---|---|---|
 | `state.json` | Current sessions: state, pid, pane, last message | While the session lives, plus 5 minutes |
 | `state.db` | Events: session, agent, state, pid, pane, times. No message text | 7 days |
+
+`state.json` is the read side for other programs, such as a status bar or a script. Its shape is
+[schema/state.schema.json](schema/state.schema.json) (JSON Schema 2020-12), also installed next
+to the tmux plugin. Check `schema_version`: a new field keeps it, a removed or changed field
+raises it. The file is replaced whole, never written in place, so a reader never sees half of it.
 
 No telemetry, no update check, no network access. To wipe everything: stop the daemon and
 `rm -r ~/.local/state/agent-status`. Homebrew itself collects analytics unless

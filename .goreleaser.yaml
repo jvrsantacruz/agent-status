@@ -29,6 +29,7 @@ archives:
       - "README.md"
       - "CHANGELOG.md"
       - "agent-status.tmux"
+      - "schema/state.schema.json"
       - "packaging/agent-status.service"
       - "examples/*"
 
@@ -76,6 +77,10 @@ nfpms:
         dst: "/usr/share/agent-status/agent-status.tmux"
         file_info:
           mode: 0o755
+      - src: "schema/state.schema.json"
+        dst: "/usr/share/agent-status/state.schema.json"
+        file_info:
+          mode: 0o644
       - src: "examples/claude-hooks.json"
         dst: "/usr/share/doc/agent-status/examples/claude-hooks.json"
         file_info:
@@ -112,7 +117,7 @@ brews:
     license: "GPL-3.0-or-later"
     install: |
       bin.install "agent-status"
-      pkgshare.install "agent-status.tmux", "examples"
+      pkgshare.install "agent-status.tmux", "schema/state.schema.json", "examples"
     service: |
       run [opt_bin/"agent-status", "daemon"]
       keep_alive true

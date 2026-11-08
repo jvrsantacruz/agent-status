@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `state.json` has a schema, [schema/state.schema.json](schema/state.schema.json), and a
+  `schema_version` field, 1. A test checks every file the daemon writes against it. Packages
+  and archives install it next to the tmux plugin.
+
 ## 0.2.2
 
 - tmux: the marker goes after the window format's leading spaces, one space from the window name:

@@ -163,8 +163,9 @@ func TestWriteReadDaemonAndPermissions(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "state.json")
 	in := StateFile{
-		Daemon:   Daemon{Version: "v1.2.3", PID: 9, EventsTotal: 4, EventsRejected: 1},
-		Sessions: map[string]state.Session{"s1": {State: state.Error, Reason: "event:error"}},
+		SchemaVersion: SchemaVersion,
+		Daemon:        Daemon{Version: "v1.2.3", PID: 9, EventsTotal: 4, EventsRejected: 1},
+		Sessions:      map[string]state.Session{"s1": {State: state.Error, Reason: "event:error"}},
 	}
 	require.NoError(t, Write(path, in))
 

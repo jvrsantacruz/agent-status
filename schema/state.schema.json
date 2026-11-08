@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jvrsantacruz/agent-status/main/schema/state.schema.json",
+  "title": "agent-status state.json",
+  "description": "The agents' current state, as the agent-status daemon writes it. Read only: send events through the FIFO. Times are milliseconds since the Unix epoch. A reader checks schema_version: a new field keeps the version, a removed or changed field raises it.",
+  "type": "object",
+  "required": ["schema_version", "daemon", "sessions"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "daemon": {
+      "description": "Which daemon wrote the file, and whether events are arriving.",
+      "type": "object",
+      "required": ["version", "pid", "started_at", "last_event_at", "events_total", "events_rejected"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {"type": "string", "description": "Such as v0.2.2, or dev."},
+        "pid": {"type": "integer", "minimum": 0},
+        "started_at": {"type": "integer", "minimum": 0},
+        "last_event_at": {"type": "integer", "minimum": 0, "description": "0 until the first event."},
+        "events_total": {"type": "integer", "minimum": 0},
+        "events_rejected": {"type": "integer", "minimum": 0}
+      }
+    },
+    "sessions": {
+      "description": "One entry per agent session, keyed by session_id.",
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/session"}
+    }
+  },
+  "$defs": {
+    "session": {
+      "type": "object",
+      "required": ["harness", "state", "pid", "tmux_pane", "dead_since", "updated_at", "message", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "harness": {"type": "string", "description": "The agent, such as claude or pi. May be empty."},
+        "state": {"enum": ["working", "question", "idle", "error", "dead"]},
+        "pid": {"type": "integer", "minimum": 0, "description": "0 when the agent gave none: the session never dies."},
+        "tmux_pane": {"type": "string", "description": "Such as %3. Empty outside tmux."},
+        "dead_since": {"type": ["integer", "null"], "description": "Set when state is dead; the session is removed 5 minutes later."},
+        "updated_at": {"type": "integer", "minimum": 0},
+        "message": {"type": "string", "description": "At most a few hundred bytes; never a prompt or a tool's input."},
+        "reason": {
+          "type": "string",
+          "pattern": "^(event:[^()]+|event:unknown\\(.*\\)|liveness:pid_gone)$",
+          "description": "What set state: event:<name>, event:unknown(<name>) or liveness:pid_gone."
+        }
+      }
+    }
+  }
+}
