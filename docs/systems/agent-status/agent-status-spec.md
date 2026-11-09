@@ -83,12 +83,22 @@ Requirements: `restore-resumes`, `resurrect-strategy`, `id-resume`.
 
 ## states
 
-| from | event | to |
-| --- | --- | --- |
-| any | harness event | the event's state |
-| any live state | process exited | dead, `exit-clears` |
-| any | end event | removed |
-| dead | dead keep time passed | removed, `exit-clears` |
+```mermaid
+stateDiagram-v2
+  state live {
+    working --> question
+    question --> working
+    working --> idle
+    working --> error
+  }
+  [*] --> live: harness event
+  live --> dead: process exited
+  dead --> live: harness event
+  live --> [*]: end event
+  dead --> [*]: dead keep time passed
+```
+
+_Session states. Inside live, an event moves to the state it names. Dead and removal serve `exit-clears`._
 
 ## failure modes
 
