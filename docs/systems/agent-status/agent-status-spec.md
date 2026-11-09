@@ -13,16 +13,15 @@ unit: one agent session; every part above keeps, shows or resumes sessions.
 
 ```mermaid
 flowchart LR
-  agent([harness]) -- agent-status emit --> fifo@{ shape: h-cyl, label: "FIFO queue" }
-  fifo --> daemon[agent-status daemon]
-  daemon --> db[(event history)]
-  db --> doctor[agent-status doctor]
-  daemon --> state[(state.json)]
-  state --> sync[agent-status sync]
-  sync -- pane marker --> tmux([tmux window list])
-  plugin[tmux plugin] -- starts --> sync
-  state -- agent-status session --> plugin
-  resurrect([tmux-resurrect]) -- pane pid --> plugin
+  agent[harness] -- agent-status emit --> fifo@{ shape: h-cyl, label: "FIFO queue" }
+  fifo -- events --> daemon[agent-status daemon]
+  daemon -- events --> db[(event history)]
+  db -- recent events --> doctor[agent-status doctor]
+  daemon -- sessions --> state[(state.json)]
+  state -- sessions --> sync[agent-status sync]
+  sync -- pane marker --> tmux[tmux window list]
+  state -- agent-status session --> plugin[tmux plugin]
+  resurrect[tmux-resurrect] -- pane pid --> plugin
   plugin -- resume command --> resurrect
 ```
 
@@ -33,15 +32,14 @@ _The containers and files of one machine; an arrow is data flowing from producer
 **agent-status** (service, lives in `cmd/agent-status`): one binary. `daemon` runs as a
 systemd user unit or a launchd agent, independent of tmux, and is the only writer of
 state.json and the event history. `sync` is a loop, one per tmux server, that ends with the
-server. `emit`, `session` and `render` are short-lived: on any runtime failure emit exits 0,
-session and render print nothing and never fail. emit fails only without a state or a session id.
+server. `emit`, `session` and `render` are short-lived. emit exits 1 on a usage error: no state, no
+session id, or fields too long for one FIFO line; on any other failure it exits 0. session
+and render print nothing and never fail.
 
 **tmux plugin** (library, lives in `.`): `agent-status.tmux` defines the markers, puts the
 marker in the window format and starts sync. With `@agent-status-resurrect` on, it links
-`agent-status-resurrect.sh` into resurrect's strategy directory, names it as resurrect's save
-command strategy, and adds claude and pi to the programs resurrect replays. The strategy asks
-`agent-status session` for the pane's session; every other pane is saved as resurrect's
-default strategy saves it.
+`agent-status-resurrect.sh` into resurrect's strategy directory, names it as the save command
+strategy, and adds claude and pi to the programs resurrect replays.
 
 ## contracts
 
@@ -99,10 +97,11 @@ _Session states. Inside live, an event moves to the state it names. Dead and rem
 
 ## failure modes
 
-- **Daemon not running**: emit says so on stderr and exits 0; the event is lost, and the next event after the daemon starts brings the session up to date.
-- **Daemon too slow**: emit gives up when the FIFO is full, says so on stderr and exits 0; the event is lost and the next one brings the session up to date.
+- **Daemon down or slow**: with no reader or a full FIFO, emit says so on stderr and exits 0; the event is lost and the next one brings the session up to date.
 - **state.json unreadable**: sync skips the pass and leaves the markers as they were; session prints nothing, so resurrect saves the plain command and the restore starts a new session.
 - **agent-status too old**: the plugin shows a message and leaves resurrect's strategy as it was.
+- **Another save strategy set**: the plugin shows a message and leaves resurrect's strategy as it was; agent panes are saved with their plain command.
+- **Session without a process id**: never marked dead; it stays until its end event, and doctor reports it.
 - **Pane without a live session**: an agent that has sent no event the daemon received, or whose process exited, is saved with its plain command, and the restore starts a new session.
 
 ## validation
