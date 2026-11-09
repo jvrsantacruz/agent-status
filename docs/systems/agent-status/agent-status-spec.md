@@ -45,7 +45,7 @@ strategy, and adds claude and pi to the programs resurrect replays.
 
 ## contracts
 
-**harness -> agent-status emit** (file, FIFO, auth file permissions)
+**harness -> agent-status emit** (file, agent-status emit command line, auth none: runs as the user)
 One event per state change, from Claude Code hooks, a pi extension or any program. The harness
 needs emit to exit 0 within its write timeout, except on a usage error such as no session id
 or an oversized line. agent-status needs the session id, process id, tmux pane, and a harness
