@@ -20,25 +20,25 @@ flowchart LR
   me([me]) -- sees which window needs me --> sys[agent-status]
   agent([harness]) -- reports each state change --> sys
   resurrect([tmux-resurrect]) -- saves each pane with its session --> sys
-  reader([local program]) -- reads every session --> sys
+  reader([user's program]) -- reads every session --> sys
 ```
 
 _The use cases: each arrow is an actor and the goal it has with agent-status._
 
 ## requirements
 
-- `window-marks`: The tmux window list MUST show the state of the session in each window's active pane.
+- `window-marks`: The tmux window list MUST mark each window whose active pane holds a session that is working, asking a question, failed or dead.
 - `exit-clears`: When a session's process exits, the window list MUST show it dead and then stop showing it.
 - `restore-resumes`: When tmux-resurrect restores a pane that held a live claude or pi session, the pane MUST reopen that same session.
-- `readable-record`: The system MUST let any local program read the harness, state and pane of every current session.
+- `readable-record`: The system MUST let any program its user runs read the harness, state and pane of every current session.
 
 ### non-functional
 
 - `never-blocks`: If the system is down or slow, then reporting a state change MUST NOT block the harness.
-- `private-text`: The system MUST NOT store a harness's prompts, tool inputs or error text.
+- `private-text`: When reading a Claude Code hook's input, the system MUST NOT keep its prompt, tool input or error text.
 - `local-only`: The system MUST NOT use the network.
 
 ### assumptions
 
 - `id-resume`: Claude Code and pi MUST reopen a session from its id given on the command line.
-- `resurrect-strategy`: tmux-resurrect MUST record each pane's command through the save command strategy its option names.
+- `resurrect-strategy`: tmux-resurrect MUST run the save command strategy its option names from its own strategy directory.

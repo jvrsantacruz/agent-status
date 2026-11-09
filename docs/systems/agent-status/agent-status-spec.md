@@ -8,9 +8,8 @@ A harness reports each state change with `agent-status emit`, which writes one l
 FIFO and returns at once. The **daemon** reads the FIFO, keeps each session's state and
 event history, marks a session dead when its process exits, and writes **state.json**. In
 each tmux server, **sync** reads state.json once a second and sets each pane's marker
-option, which the window format reads. When resurrect integration is on, the **resurrect
-strategy** asks `agent-status session` which session a pane holds and saves the pane's
-command with that session's id. **doctor** reads the history to explain a session; the daemon prunes it at
+option, which the window format reads. The **tmux plugin** starts sync and, when resurrect integration is on, gives resurrect a save
+strategy that saves an agent pane's command with its session id. **doctor** reads the history to explain a session; the daemon prunes it at
 an age set in `cmd/agent-status/daemon.go`.
 
 ```mermaid
@@ -22,10 +21,10 @@ flowchart LR
   daemon --> state[(state.json)]
   state --> sync[sync]
   sync -- pane marker --> tmux([tmux window list])
-  state --> session[session]
-  resurrect([tmux-resurrect]) -- pane pid --> strategy[resurrect strategy]
-  strategy --> session
-  strategy -- resume command --> resurrect
+  plugin[tmux plugin] -- starts --> sync
+  state -- agent-status session --> plugin
+  resurrect([tmux-resurrect]) -- pane pid --> plugin
+  plugin -- resume command --> resurrect
 ```
 
 _The containers and files of one machine; an arrow is data flowing from producer to consumer._
@@ -34,13 +33,16 @@ _The containers and files of one machine; an arrow is data flowing from producer
 
 **agent-status** (service, lives in `cmd/agent-status`): one binary. `daemon` runs as a
 systemd user unit or a launchd agent, independent of tmux, and is the only writer of
-state.json and the event history. `emit`, `sync`, `session` and `render` are short-lived
-clients that never fail their caller.
+state.json and the event history. `sync` is a loop, one per tmux server, that ends with the
+server. `emit`, `session` and `render` are short-lived: on any runtime failure emit exits 0,
+and session and render print nothing; only a malformed call fails.
 
-**resurrect strategy** (library, lives in `.`): `agent-status-resurrect.sh`. The tmux plugin
-links it into resurrect's strategy directory, because resurrect runs strategies only from
-there. Every pane without a live session of its program is saved as resurrect's default
-strategy saves it.
+**tmux plugin** (library, lives in `.`): `agent-status.tmux` defines the markers, puts the
+marker in the window format and starts sync. With `@agent-status-resurrect` on, it links
+`agent-status-resurrect.sh` into resurrect's strategy directory, names it as resurrect's save
+command strategy, and adds claude and pi to the programs resurrect replays. The strategy asks
+`agent-status session` for the pane's session; every other pane is saved as resurrect's
+default strategy saves it.
 
 ## contracts
 
@@ -52,7 +54,7 @@ process id to tell when the session ends. Format:
 [event format](https://github.com/jvrsantacruz/agent-status#event-format).
 Requirements: `never-blocks`, `private-text`.
 
-**daemon -> local programs** (file, state.json, auth file permissions)
+**daemon -> the user's programs** (file, state.json, auth file permissions)
 state.json, replaced whole after each change, described by its
 [schema](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json).
 Readers need a complete file at every read; fields are only added, and a removed or changed
@@ -65,12 +67,19 @@ marker option of its state, which the plugin or a theme defines. The window form
 so a redraw runs no command.
 Requirements: `window-marks`.
 
-**tmux-resurrect -> resurrect strategy** (file, save command strategy, auth none: runs as the user)
+**tmux-resurrect -> tmux plugin** (file, save command strategy, auth none: runs as the user)
 On each save, resurrect calls the strategy with a pane's process id and records what it
 prints as the pane's command. On restore it types that command into the rebuilt pane when
 `@resurrect-processes` lists the program. The strategy prints the harness's resume command
 with the session id for a pane holding a live session of that harness.
 Requirements: `restore-resumes`, `resurrect-strategy`, `id-resume`.
+
+## data model
+
+| entity | stored in | key | shape | written by |
+| --- | --- | --- | --- | --- |
+| session | state.json, removed after the dead keep time in `cmd/agent-status/daemon.go` | session id, joined to a tmux pane by pane id | [state.schema.json](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json) | daemon |
+| event | state.db, kept for the retention in `cmd/agent-status/daemon.go`, no message text | row id, joined to a session by session id | [store.go](https://github.com/jvrsantacruz/agent-status/blob/main/internal/store/store.go) | daemon |
 
 ## states
 
@@ -86,7 +95,7 @@ Requirements: `restore-resumes`, `resurrect-strategy`, `id-resume`.
 - **Daemon not running**: emit says so on stderr and exits 0; the event is lost, and the next event after the daemon starts brings the session up to date.
 - **Daemon too slow**: emit gives up when the FIFO is full, says so on stderr and exits 0; the event is lost and the next one brings the session up to date.
 - **state.json unreadable**: sync skips the pass and leaves the markers as they were; session prints nothing, so resurrect saves the plain command and the restore starts a new session.
-- **Pane without a live session**: an agent started before the daemon, or whose process exited, is saved with its plain command, and the restore starts a new session.
+- **Pane without a live session**: an agent that has sent no event the daemon received, or whose process exited, is saved with its plain command, and the restore starts a new session.
 
 ## validation
 
