@@ -70,3 +70,4 @@ rebuilt: fix forward with a new patch version.
 - Every Go and shell file starts with `SPDX-License-Identifier: GPL-3.0-or-later`.
 - Commits: `<area>: <what changed>`, signed off (`git commit -s`). User-visible changes go in
   CHANGELOG.md under the next version.
+- System definitions live in docs/systems/<name>/. Build or update them using the system-def skill, and lint them with its check.py before committing.
