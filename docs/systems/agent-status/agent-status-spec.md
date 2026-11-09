@@ -71,7 +71,7 @@ On each save, resurrect calls the strategy with a pane's process id and records 
 prints as the pane's command. On restore it types that command into the rebuilt pane when
 `@resurrect-processes` lists the program. The strategy prints the harness's resume command
 with the session id for a pane holding a live session of that harness.
-Requirements: `restore-resumes`, `resurrect-strategy`, `id-resume`.
+Requirements: `restore-resumes`, `resurrect-installed`, `id-resume`.
 
 ## data model
 

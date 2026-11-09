@@ -41,4 +41,4 @@ _The use cases: each arrow is an actor and the goal it has with agent-status._
 ### assumptions
 
 - `id-resume`: The harness MUST reopen a session from its id given on the command line.
-- `resurrect-strategy`: tmux-resurrect MUST run the save command strategy its option names from its own strategy directory.
+- `resurrect-installed`: tmux-resurrect MUST be installed with TPM, saving and restoring panes, and running a save command strategy installed in its plugin directory.
