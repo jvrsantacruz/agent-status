@@ -30,12 +30,11 @@ _The containers of one machine; an arrow is data from producer to consumer._
 
 ## building blocks
 
-**agent-status** (service, lives in `cmd/agent-status`): one binary. `daemon` runs as a
+**agent-status binary** (service, lives in `cmd/agent-status`): one binary. `daemon` runs as a
 systemd user unit or a launchd agent and is the only writer of
 state.json and the event history. `sync` is a loop, one per tmux server, that ends with the
-server. emit exits 1 on a usage error: no state, no
-session id, or fields too long for one FIFO line; on any other failure it exits 0. session
-and render print nothing and never fail.
+server. session and render print nothing and never
+fail.
 
 **tmux plugin** (library, lives in `.`): `agent-status.tmux` defines the markers, puts the
 marker in the window format and starts sync. With `@agent-status-resurrect` on, it links
@@ -46,10 +45,12 @@ strategy, and adds claude and pi to the programs resurrect replays.
 
 **harness -> agent-status emit** (file, FIFO, auth file permissions)
 One event per state change, from Claude Code hooks, a pi extension or any program. The
-harness needs emit to exit 0 within its write timeout; agent-status needs the process id to
-tell when the session ends. Format:
+harness needs emit to exit 0 within its write timeout on any failure but a usage error: no
+state, no session id, or fields too long for one FIFO line. agent-status needs the session
+id, the process id to tell when it ends, the tmux pane, and the harness name, which must
+match the program for a restore to resume it. Format:
 [event format](https://github.com/jvrsantacruz/agent-status#event-format).
-Requirements: `never-blocks`, `private-text`.
+Requirements: `never-blocks`, `private-text`, `window-marks`, `restore-resumes`.
 
 **daemon -> the user's programs** (file, state.json, auth file permissions)
 Replaced whole after each change, so a reader never sees half a file. Fields are only added;
@@ -77,7 +78,7 @@ Requirements: `restore-resumes`.
 | entity | stored in | key | shape | written by | kept for |
 | --- | --- | --- | --- | --- | --- |
 | session | state.json | session id, joined to a tmux pane by pane id | [state.schema.json](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json) | daemon | while live, then the dead keep time in `cmd/agent-status/daemon.go`, across restarts |
-| event | state.db | row id, joined to a session by session id; no message text | [store.go](https://github.com/jvrsantacruz/agent-status/blob/main/internal/store/store.go) | daemon | the retention in `cmd/agent-status/daemon.go` |
+| event | state.db | row id, joined to a session by session id; no message text | session id, harness, event, process id, pane, sent and received time, whether understood | daemon | the retention in `cmd/agent-status/daemon.go` |
 
 ## states
 
@@ -97,12 +98,10 @@ _Session states. A harness event moves to the state it names. Dead and removal s
 
 ## failure modes
 
-- **Daemon down or slow**: with no reader or a full FIFO, emit says so on stderr and exits 0; the event is lost and the next one brings the session up to date.
-- **state.json unreadable**: sync skips the pass and leaves the markers as they were; session prints nothing, so resurrect saves the plain command and the restore starts a new session.
-- **agent-status too old**: the plugin shows a message and leaves resurrect's strategy as it was.
-- **Another save strategy set**: the plugin shows a message and leaves resurrect's strategy as it was; agent panes are saved with their plain command.
-- **Session without a process id**: never marked dead, it stays until its end event; doctor reports it.
-- **Pane without a live session**: an agent with no event received, or whose process exited, is saved with its plain command; the restore starts a new session.
+- **Event lost**: with no daemon or a full FIFO, emit says so on stderr and exits 0; the next event brings the session up to date.
+- **Plain command saved**: when state.json is unreadable, the pane has no live session, or its agent sent no event, resurrect saves the plain command and the restore starts a new session; sync keeps the markers as they were.
+- **Resurrect left alone**: when agent-status is too old or another save strategy is set, the plugin shows a message and changes nothing.
+- **Session never cleared**: one without a process id is never marked dead and stays until its end event; doctor reports it.
 
 ## validation
 

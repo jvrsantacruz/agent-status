@@ -27,7 +27,7 @@ _The use cases: each arrow is an actor and the goal it has with agent-status._
 
 ## requirements
 
-- `window-marks`: The tmux window list MUST mark each window whose active pane holds a session that is working, asking a question, in error or dead.
+- `window-marks`: The tmux window list MUST mark each window whose active pane holds a session that is working, asking a question or in error.
 - `exit-clears`: When a session's process exits, the window list MUST show it dead and then stop showing it.
 - `restore-resumes`: When tmux-resurrect restores a pane that held a live claude or pi session, the pane MUST reopen that same session.
 - `readable-record`: The system MUST let any program its user runs read the harness, state and pane of every current session.
