@@ -5,34 +5,35 @@
 A harness reports each state change with `agent-status emit`, which writes one line to a
 FIFO and returns within its write timeout. The **daemon** reads the FIFO, keeps each session's state and
 event history, marks a session dead when its process exits, and writes **state.json**. In
-each tmux server, **sync** reads state.json once a second and sets each pane's marker
-option, which the window format reads. The **tmux plugin** starts sync and, when resurrect integration is on, gives resurrect a save
+each tmux server, **sync** loads each pane's marker from state.json once a second. The **tmux plugin** starts sync and, when resurrect integration is on, gives resurrect a save
 strategy that saves an agent pane's command with its session id. **doctor** reads the history to explain a session.
 
 unit: one agent session; every part above keeps, shows or resumes sessions.
 
 ```mermaid
 flowchart LR
-  agent[harness] -- agent-status emit --> fifo@{ shape: h-cyl, label: "FIFO queue" }
-  fifo -- events --> daemon[agent-status daemon]
-  daemon -- events --> db[(event history)]
-  db -- recent events --> doctor[agent-status doctor]
-  daemon -- sessions --> state[(state.json)]
-  state -- sessions --> sync[agent-status sync]
+  agent[harness] -- state change --> fifo
+  subgraph agent-status
+    fifo@{ shape: h-cyl, label: "FIFO queue" } -- events --> daemon[agent-status daemon]
+    daemon -- events --> db[(event history)]
+    db -- recent events --> doctor[agent-status doctor]
+    daemon -- sessions --> state[(state.json)]
+    state -- sessions --> sync[agent-status sync]
+    state -- session id --> plugin[tmux plugin]
+  end
   sync -- pane marker --> tmux[tmux window list]
-  state -- agent-status session --> plugin[tmux plugin]
   resurrect[tmux-resurrect] -- pane pid --> plugin
   plugin -- resume command --> resurrect
 ```
 
-_The containers and files of one machine; an arrow is data flowing from producer to consumer._
+_The containers of one machine; an arrow is data from producer to consumer._
 
 ## building blocks
 
 **agent-status** (service, lives in `cmd/agent-status`): one binary. `daemon` runs as a
 systemd user unit or a launchd agent and is the only writer of
 state.json and the event history. `sync` is a loop, one per tmux server, that ends with the
-server. `emit`, `session` and `render` are short-lived. emit exits 1 on a usage error: no state, no
+server. emit exits 1 on a usage error: no state, no
 session id, or fields too long for one FIFO line; on any other failure it exits 0. session
 and render print nothing and never fail.
 
@@ -73,10 +74,10 @@ Requirements: `restore-resumes`.
 
 ## data model
 
-| entity | stored in | key | shape | written by |
-| --- | --- | --- | --- | --- |
-| session | state.json, reloaded by a restarted daemon | session id, joined to a tmux pane by pane id | [state.schema.json](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json) | daemon |
-| event | state.db, kept for the retention in `cmd/agent-status/daemon.go`, no message text | row id, joined to a session by session id | [store.go](https://github.com/jvrsantacruz/agent-status/blob/main/internal/store/store.go) | daemon |
+| entity | stored in | key | shape | written by | kept for |
+| --- | --- | --- | --- | --- | --- |
+| session | state.json | session id, joined to a tmux pane by pane id | [state.schema.json](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json) | daemon | while live, then the dead keep time in `cmd/agent-status/daemon.go`, across restarts |
+| event | state.db | row id, joined to a session by session id; no message text | [store.go](https://github.com/jvrsantacruz/agent-status/blob/main/internal/store/store.go) | daemon | the retention in `cmd/agent-status/daemon.go` |
 
 ## states
 
