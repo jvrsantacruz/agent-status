@@ -193,13 +193,18 @@ func TestRender(t *testing.T) {
 	sf := `{"sessions":{
 		"old":{"state":"error","tmux_pane":"%0","updated_at":100},
 		"new":{"state":"working","tmux_pane":"%0","updated_at":200},
-		"idle":{"state":"idle","tmux_pane":"%1","updated_at":100}}}`
+		"idle":{"state":"idle","tmux_pane":"%1","updated_at":100},
+		"exited":{"state":"dead","tmux_pane":"%2","updated_at":300},
+		"next":{"state":"question","tmux_pane":"%2","updated_at":200},
+		"gone":{"state":"dead","tmux_pane":"%3","updated_at":100}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.json"), []byte(sf), 0o600))
 
 	cases := map[string]string{
 		"%0":      "#{E:@agent_mark_working}", // newest session on the pane wins
 		"main:%0": "#{E:@agent_mark_working}", // older theme format
 		"%1":      "",
+		"%2":      "#{E:@agent_mark_question}", // req: window-marks, a live session wins over one that died later
+		"%3":      "#{E:@agent_mark_dead}",     // req: exit-clears
 		"%9":      "",
 	}
 	for pane, want := range cases {

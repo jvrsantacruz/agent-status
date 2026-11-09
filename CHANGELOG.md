@@ -5,6 +5,8 @@
 - tmux-resurrect: with `set -g @agent-status-resurrect 'on'`, a pane running claude or pi is saved
   with its session id, so a restore resumes that session instead of starting a new one.
 - `agent-status session <pane>` prints the harness and id of the live session on a pane.
+- tmux: a pane where an agent quit and another started shows the new agent's state, not the old
+  one as dead.
 - A restarted daemon reloads the sessions in `state.json`, so an upgrade forgets no running
   session; the ones whose process exited while it was down show as dead.
 

@@ -33,7 +33,12 @@ func runRender(args []string, stdout io.Writer) int {
 func marker(sf export.StateFile, pane string) string {
 	// Older themes pass "session:%3"; the pane id alone identifies the pane.
 	pane = pane[strings.LastIndex(pane, ":")+1:]
-	_, newest := newestOnPane(sf, pane, func(state.Session) bool { return true })
+	// A live session wins over one that died later in the same pane, such
+	// as the agent quit before this one started.
+	_, newest := newestOnPane(sf, pane, func(s state.Session) bool { return s.State != state.Dead })
+	if newest == nil {
+		_, newest = newestOnPane(sf, pane, func(state.Session) bool { return true })
+	}
 	if newest == nil || newest.State == state.Idle {
 		return ""
 	}
