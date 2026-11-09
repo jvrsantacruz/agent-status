@@ -115,6 +115,22 @@ func TestEmitFromClaudeHookEnv(t *testing.T) {
 	assert.Equal(t, `say "hi"`, m["message"])
 }
 
+// req: restore-resumes
+// A hook without Claude's environment still names its harness, so a restore
+// can resume the session.
+func TestEmitClaudeHookNamesHarness(t *testing.T) {
+	dir := t.TempDir()
+	ch := readOne(t, filepath.Join(dir, "in.fifo"))
+	cmd := command(dir, cleanEnv(dir), "emit", "--claude-hook", "working")
+	cmd.Stdin = strings.NewReader(`{"session_id":"s1","hook_event_name":"PreToolUse","tool_name":"Bash"}`)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	m := emitted(t, ch)
+	assert.Equal(t, "s1", m["session_id"])
+	assert.Equal(t, "claude", m["harness"])
+}
+
 func TestEmitFlagsForAnyAgent(t *testing.T) {
 	dir := t.TempDir()
 	ch := readOne(t, filepath.Join(dir, "in.fifo"))

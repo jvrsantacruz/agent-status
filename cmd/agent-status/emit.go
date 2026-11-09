@@ -64,6 +64,10 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 		if msg == "" {
 			msg = h.message()
 		}
+		// Only Claude Code runs this hook; a restore resumes by harness name.
+		if *harness == "unknown" && !flagSet(fs, "harness") {
+			*harness = "claude"
+		}
 	}
 	if *session == "" {
 		fmt.Fprintln(stderr, "agent-status emit: no session id: pass --session or set AGENT_STATUS_SESSION")
