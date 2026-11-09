@@ -199,6 +199,7 @@ tmux options, set before TPM runs:
 | `@agent_mark_error` | `#[fg=colour1]✗ #[default]` |
 | `@agent_mark_dead` | `#[fg=colour8,dim]x #[default]` |
 | `@agent-status-auto-format` | `on`: the plugin puts the marker at the start of `window-status-format` and `window-status-current-format`, after their leading spaces. `off`: add `#{E:@agent_mark}` yourself |
+| `@agent-status-resurrect` | `off`. `on`: with [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) installed by TPM, a pane running claude or pi is saved as `claude --resume <id>` or `pi --session <id>`, so a restore resumes the same session. The plugin links `agent-status-resurrect.sh` into resurrect's strategy directory and sets `@resurrect-save-command-strategy`. Add `claude` and `pi` to `@resurrect-processes` |
 
 ## Troubleshooting
 

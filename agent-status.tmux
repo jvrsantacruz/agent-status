@@ -13,6 +13,8 @@
 #                                    #{E:@agent_mark}
 #   @agent_mark_working, @agent_mark_question, @agent_mark_error,
 #   @agent_mark_dead                 the glyph and colours of each state
+#   @agent-status-resurrect 'on'     tmux-resurrect saves each agent pane
+#                                    with its session, so a restore resumes it
 
 bin="${AGENT_STATUS_BIN:-$(command -v agent-status)}"
 if [ -z "$bin" ]; then
@@ -35,6 +37,20 @@ set_default @agent_mark_dead '#[fg=colour8,dim]x #[default]'
 # One sync per server reads state.json and loads each pane's marker into
 # @agent_mark; the window list only reads it, so a redraw runs no job.
 tmux run-shell -b "'$bin' sync"
+
+# With tmux-resurrect, an agent pane is saved with its session id, so a
+# restore resumes it. Resurrect only runs strategies from its own directory.
+if [ "$(tmux show-options -gqv @agent-status-resurrect)" = "on" ]; then
+	plugin_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+	tpm_dir="$(tmux show-environment -g TMUX_PLUGIN_MANAGER_PATH 2>/dev/null | cut -d= -f2-)"
+	strategies="${tpm_dir%/}/tmux-resurrect/save_command_strategies"
+	if [ -n "$tpm_dir" ] && [ -d "$strategies" ]; then
+		ln -sf "$plugin_dir/agent-status-resurrect.sh" "$strategies/agent-status.sh"
+		tmux set-option -g @resurrect-save-command-strategy agent-status
+	else
+		tmux display-message "agent-status: @agent-status-resurrect is on, but tmux-resurrect is not installed with TPM"
+	fi
+fi
 
 [ "$(tmux show-options -gqv @agent-status-auto-format)" = "off" ] && exit 0
 

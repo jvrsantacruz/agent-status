@@ -185,6 +185,28 @@ func TestRender(t *testing.T) {
 	}
 }
 
+func TestSession(t *testing.T) {
+	dir := t.TempDir()
+	sf := `{"sessions":{
+		"old":{"harness":"claude","state":"idle","tmux_pane":"%0","updated_at":100},
+		"new":{"harness":"claude","state":"working","tmux_pane":"%0","updated_at":200},
+		"p1":{"harness":"pi","state":"idle","tmux_pane":"%1","updated_at":100},
+		"gone":{"harness":"claude","state":"dead","tmux_pane":"%2","updated_at":100}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.json"), []byte(sf), 0o600))
+
+	cases := map[string]string{
+		"%0": "claude new\n", // newest session on the pane wins
+		"%1": "pi p1\n",
+		"%2": "", // a dead session is not resumed
+		"%9": "",
+	}
+	for pane, want := range cases {
+		out, err := command(dir, cleanEnv(dir), "session", pane).Output()
+		require.NoError(t, err)
+		assert.Equal(t, want, string(out), pane)
+	}
+}
+
 func TestRenderWithoutStateIsSilent(t *testing.T) {
 	dir := t.TempDir()
 	out, err := command(dir, cleanEnv(dir), "render", "%0").CombinedOutput()

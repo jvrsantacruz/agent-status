@@ -29,6 +29,7 @@ archives:
       - "README.md"
       - "CHANGELOG.md"
       - "agent-status.tmux"
+      - "agent-status-resurrect.sh"
       - "schema/state.schema.json"
       - "packaging/agent-status.service"
       - "examples/*"
@@ -77,6 +78,10 @@ nfpms:
         dst: "/usr/share/agent-status/agent-status.tmux"
         file_info:
           mode: 0o755
+      - src: "agent-status-resurrect.sh"
+        dst: "/usr/share/agent-status/agent-status-resurrect.sh"
+        file_info:
+          mode: 0o755
       - src: "schema/state.schema.json"
         dst: "/usr/share/agent-status/state.schema.json"
         file_info:
@@ -117,7 +122,7 @@ brews:
     license: "GPL-3.0-or-later"
     install: |
       bin.install "agent-status"
-      pkgshare.install "agent-status.tmux", "schema/state.schema.json", "examples"
+      pkgshare.install "agent-status.tmux", "agent-status-resurrect.sh", "schema/state.schema.json", "examples"
     service: |
       run [opt_bin/"agent-status", "daemon"]
       keep_alive true

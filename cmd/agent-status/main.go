@@ -28,6 +28,7 @@ commands:
                                   --claude-hook inside a Claude Code hook
   render <pane>                   print the tmux marker for a pane id, such as %3
   sync [--once]                   keep each tmux pane's @agent_mark current; the plugin starts it
+  session <pane>                  print the harness and session id on a pane
   doctor                          check the installation end to end
   version                         print version, commit and platform
 
@@ -49,6 +50,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runDaemon()
 	case "emit":
 		return runEmit(args[1:], stdin, stderr)
+	case "session":
+		return runSession(args[1:], stdout)
 	case "render":
 		return runRender(args[1:], stdout)
 	case "sync":
