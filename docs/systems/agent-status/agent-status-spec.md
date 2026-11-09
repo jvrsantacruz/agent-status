@@ -2,11 +2,13 @@
 
 ## overview
 
-A harness reports each state change with `agent-status emit`, which writes one line to a
-FIFO and returns within its write timeout. The **daemon** reads the FIFO, keeps each session's state and
-event history, marks a session dead when its process exits, and writes **state.json**. In
-each tmux server, **sync** loads each pane's marker from state.json once a second. The **tmux plugin** starts sync and, when resurrect integration is on, gives resurrect a save
-strategy that saves an agent pane's command with its session id. **doctor** reads the history to explain a session.
+The **agent-status binary** holds every command. A harness reports each state change with
+`emit`, which writes one line to a FIFO. The **daemon** reads it, keeps each session's state
+and event history, marks a session dead when its process exits, and writes **state.json**.
+In each tmux server, **sync** loads each pane's marker from state.json once a second. The
+**tmux plugin** starts sync and, with resurrect integration on, gives resurrect a save
+strategy that asks **session** for a pane's session id. **doctor** reads the history; it is left out of
+the diagram.
 
 unit: one agent session; every part above keeps, shows or resumes sessions.
 
@@ -16,10 +18,10 @@ flowchart LR
   subgraph agent-status
     fifo@{ shape: h-cyl, label: "FIFO queue" } -- events --> daemon[agent-status daemon]
     daemon -- events --> db[(event history)]
-    db -- recent events --> doctor[agent-status doctor]
     daemon -- sessions --> state[(state.json)]
     state -- sessions --> sync[agent-status sync]
-    state -- session id --> plugin[tmux plugin]
+    state -- sessions --> session[agent-status session]
+    session -- session id --> plugin[tmux plugin]
   end
   sync -- pane marker --> tmux[tmux window list]
   resurrect[tmux-resurrect] -- pane pid --> plugin
@@ -33,8 +35,7 @@ _The containers of one machine; an arrow is data from producer to consumer._
 **agent-status binary** (service, lives in `cmd/agent-status`): one binary. `daemon` runs as a
 systemd user unit or a launchd agent and is the only writer of
 state.json and the event history. `sync` is a loop, one per tmux server, that ends with the
-server. session and render print nothing and never
-fail.
+server. session and render print nothing on any error and always exit 0.
 
 **tmux plugin** (library, lives in `.`): `agent-status.tmux` defines the markers, puts the
 marker in the window format and starts sync. With `@agent-status-resurrect` on, it links
@@ -99,7 +100,8 @@ _Session states. A harness event moves to the state it names. Dead and removal s
 ## failure modes
 
 - **Event lost**: with no daemon or a full FIFO, emit says so on stderr and exits 0; the next event brings the session up to date.
-- **Plain command saved**: when state.json is unreadable, the pane has no live session, or its agent sent no event, resurrect saves the plain command and the restore starts a new session; sync keeps the markers as they were.
+- **Plain command saved**: when state.json is unreadable, the pane has no live session, or its agent sent no event, resurrect saves the plain command and the restore starts a new session.
+- **Markers kept**: when state.json is unreadable, sync leaves every marker as it was; when it is missing, sync clears them.
 - **Resurrect left alone**: when agent-status is too old or another save strategy is set, the plugin shows a message and changes nothing.
 - **Session never cleared**: one without a process id is never marked dead and stays until its end event; doctor reports it.
 
