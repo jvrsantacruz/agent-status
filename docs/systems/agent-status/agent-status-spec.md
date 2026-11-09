@@ -2,14 +2,14 @@
 
 ## overview
 
-unit: one session, from its first event to its removal
-
 A harness reports each state change with `agent-status emit`, which writes one line to a
 FIFO and returns at once. The **daemon** reads the FIFO, keeps each session's state and
 event history, marks a session dead when its process exits, and writes **state.json**. In
 each tmux server, **sync** reads state.json once a second and sets each pane's marker
 option, which the window format reads. The **tmux plugin** starts sync and, when resurrect integration is on, gives resurrect a save
 strategy that saves an agent pane's command with its session id. **doctor** reads the history to explain a session.
+
+unit: one agent session; every part above keeps, shows or resumes sessions.
 
 ```mermaid
 flowchart LR
