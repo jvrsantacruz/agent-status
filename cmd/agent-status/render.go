@@ -44,7 +44,7 @@ func marker(sf export.StateFile, pane string) string {
 // such as "claude 37f1...", so other tools can resume it. Nothing when the
 // pane has none.
 func runSession(args []string, stdout io.Writer) int {
-	if len(args) < 1 {
+	if len(args) < 1 || args[0] == "" {
 		return 0
 	}
 	sf, err := export.Read(statePath())

@@ -44,7 +44,12 @@ if [ "$(tmux show-options -gqv @agent-status-resurrect)" = "on" ]; then
 	plugin_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 	tpm_dir="$(tmux show-environment -g TMUX_PLUGIN_MANAGER_PATH 2>/dev/null | cut -d= -f2-)"
 	strategies="${tpm_dir%/}/tmux-resurrect/save_command_strategies"
-	if [ -n "$tpm_dir" ] && [ -d "$strategies" ]; then
+	current="$(tmux show-options -gqv @resurrect-save-command-strategy)"
+	if ! "$bin" session %0 >/dev/null 2>&1; then
+		tmux display-message "agent-status: @agent-status-resurrect needs agent-status 0.3.1 or later"
+	elif [ -n "$current" ] && [ "$current" != ps ] && [ "$current" != agent-status ]; then
+		tmux display-message "agent-status: @agent-status-resurrect is on, but @resurrect-save-command-strategy is already $current"
+	elif [ -n "$tpm_dir" ] && [ -d "$strategies" ]; then
 		ln -sf "$plugin_dir/agent-status-resurrect.sh" "$strategies/agent-status.sh"
 		tmux set-option -g @resurrect-save-command-strategy agent-status
 		# Resurrect replays only the programs on its list, which it adds to

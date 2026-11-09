@@ -3,7 +3,7 @@
 ## overview
 
 A harness reports each state change with `agent-status emit`, which writes one line to a
-FIFO and returns at once. The **daemon** reads the FIFO, keeps each session's state and
+FIFO and returns within its write timeout. The **daemon** reads the FIFO, keeps each session's state and
 event history, marks a session dead when its process exits, and writes **state.json**. In
 each tmux server, **sync** reads state.json once a second and sets each pane's marker
 option, which the window format reads. The **tmux plugin** starts sync and, when resurrect integration is on, gives resurrect a save
@@ -34,7 +34,7 @@ _The containers and files of one machine; an arrow is data flowing from producer
 systemd user unit or a launchd agent, independent of tmux, and is the only writer of
 state.json and the event history. `sync` is a loop, one per tmux server, that ends with the
 server. `emit`, `session` and `render` are short-lived: on any runtime failure emit exits 0,
-and session and render print nothing; only a malformed call fails.
+session and render print nothing and never fail. emit fails only without a state or a session id.
 
 **tmux plugin** (library, lives in `.`): `agent-status.tmux` defines the markers, puts the
 marker in the window format and starts sync. With `@agent-status-resurrect` on, it links
@@ -46,10 +46,9 @@ default strategy saves it.
 ## contracts
 
 **harness -> agent-status emit** (file, FIFO, auth file permissions)
-One event per state change: session id, harness, state, process id and pane. Claude Code
-calls it from hooks with the hook input on stdin, pi from an extension, any program from the
-command line. The harness needs emit to return at once and exit 0; agent-status needs the
-process id to tell when the session ends. Format:
+One event per state change, from Claude Code hooks, a pi extension or any program. The
+harness needs emit to exit 0 within its write timeout; agent-status needs the process id to
+tell when the session ends. Format:
 [event format](https://github.com/jvrsantacruz/agent-status#event-format).
 Requirements: `never-blocks`, `private-text`.
 
@@ -61,23 +60,22 @@ field raises the schema version.
 Requirements: `readable-record`.
 
 **sync -> tmux** (ui, tmux pane options, auth tmux server socket)
-sync sets the pane option `@agent_mark` where a pane's marker changed, to a reference to the
-marker option of its state, which the plugin or a theme defines. The window format reads it,
-so a redraw runs no command.
+sync sets the pane option `@agent_mark` where a pane's marker changed, to the marker option
+of its state. The window format reads it, so a redraw runs no command.
 Requirements: `window-marks`.
 
 **tmux-resurrect -> tmux plugin** (file, save command strategy, auth none: runs as the user)
-On each save, resurrect calls the strategy with a pane's process id and records what it
-prints as the pane's command. On restore it types that command into the rebuilt pane when
-`@resurrect-processes` lists the program. The strategy prints the harness's resume command
-with the session id for a pane holding a live session of that harness.
+On save, resurrect records what the strategy prints for a pane's process id: the resume
+command when the pane holds a live session of its program. On restore it types that command
+when its restore list matches the program; a user's inline strategy for claude or pi
+replaces it.
 Requirements: `restore-resumes`, `resurrect-installed`, `id-resume`.
 
 ## data model
 
 | entity | stored in | key | shape | written by |
 | --- | --- | --- | --- | --- |
-| session | state.json, removed after the dead keep time in `cmd/agent-status/daemon.go` | session id, joined to a tmux pane by pane id | [state.schema.json](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json) | daemon |
+| session | state.json, reloaded by a restarted daemon | session id, joined to a tmux pane by pane id | [state.schema.json](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json) | daemon |
 | event | state.db, kept for the retention in `cmd/agent-status/daemon.go`, no message text | row id, joined to a session by session id | [store.go](https://github.com/jvrsantacruz/agent-status/blob/main/internal/store/store.go) | daemon |
 
 ## states
@@ -104,6 +102,7 @@ _Session states. Inside live, an event moves to the state it names. Dead and rem
 - **Daemon not running**: emit says so on stderr and exits 0; the event is lost, and the next event after the daemon starts brings the session up to date.
 - **Daemon too slow**: emit gives up when the FIFO is full, says so on stderr and exits 0; the event is lost and the next one brings the session up to date.
 - **state.json unreadable**: sync skips the pass and leaves the markers as they were; session prints nothing, so resurrect saves the plain command and the restore starts a new session.
+- **agent-status too old**: the plugin shows a message and leaves resurrect's strategy as it was.
 - **Pane without a live session**: an agent that has sent no event the daemon received, or whose process exited, is saved with its plain command, and the restore starts a new session.
 
 ## validation
@@ -111,6 +110,6 @@ _Session states. Inside live, an event moves to the state it names. Dead and rem
 fixtures: [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go): the real binary is built and run in a clean environment, fed emit calls and saved Claude Code hook inputs through its FIFO, or given hand-written state.json files, for every state, a dead session and a missing daemon; expected outputs from hand-checked state.json, render and session values; compared exactly.
 
 - `restore-resumes` (demonstration, [resurrect strategy](https://github.com/jvrsantacruz/agent-status/blob/main/agent-status-resurrect.sh)): run on live panes, each pane with a live session prints its resume command and every other pane resurrect's default command.
-- `never-blocks` (test, [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go)): with no daemon, and with a daemon that never reads a full FIFO, emit returns at once and exits 0.
+- `never-blocks` (test, [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go)): with no daemon, and with a daemon that never reads a full FIFO, emit returns within its write timeout and exits 0.
 - `private-text` (test, [hook tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/hook_test.go)): the message taken from hook input never carries the prompt, a tool input or error text.
 - `local-only` (inspection, [AGENTS.md](https://github.com/jvrsantacruz/agent-status/blob/main/AGENTS.md)): no package opens a network connection.

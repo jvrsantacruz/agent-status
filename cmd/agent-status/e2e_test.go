@@ -8,6 +8,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -216,7 +217,8 @@ func TestSession(t *testing.T) {
 		"new":{"harness":"claude","state":"working","tmux_pane":"%0","updated_at":200},
 		"p1":{"harness":"pi","state":"idle","tmux_pane":"%1","updated_at":100},
 		"exited":{"harness":"pi","state":"idle","pid":2147483646,"tmux_pane":"%1","updated_at":200},
-		"gone":{"harness":"claude","state":"dead","tmux_pane":"%2","updated_at":100}}}`
+		"gone":{"harness":"claude","state":"dead","tmux_pane":"%2","updated_at":100},
+		"outside":{"harness":"claude","state":"idle","tmux_pane":"","updated_at":300}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.json"), []byte(sf), 0o600))
 
 	cases := map[string]string{
@@ -224,6 +226,7 @@ func TestSession(t *testing.T) {
 		"%1": "pi p1\n",      // a newer session whose process exited is skipped
 		"%2": "",             // a dead session is not resumed
 		"%9": "",
+		"":   "", // no pane: never a session sent from outside tmux
 	}
 	for pane, want := range cases {
 		out, err := command(dir, cleanEnv(dir), "session", pane).Output()
@@ -274,6 +277,34 @@ func TestDaemonDoctorRoundTrip(t *testing.T) {
 	require.NoError(t, daemon.Wait(), "daemon exits 0 on SIGTERM")
 	assert.Contains(t, log.String(), `"msg":"event"`)
 	assert.Contains(t, log.String(), `"known_event":true`)
+}
+
+// req: exit-clears
+// A restarted daemon keeps the sessions still running and marks dead the ones
+// whose process exited while it was down.
+func TestDaemonRestartKeepsLiveSessions(t *testing.T) {
+	dir := t.TempDir()
+	prev := fmt.Sprintf(`{"schema_version":1,"sessions":{
+		"alive":{"harness":"claude","state":"idle","pid":%d,"tmux_pane":"%%1","updated_at":1},
+		"exited":{"harness":"claude","state":"working","pid":2147483646,"tmux_pane":"%%2","updated_at":1}}}`, os.Getpid())
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.json"), []byte(prev), 0o600))
+
+	daemon := command(dir, cleanEnv(dir), "daemon")
+	require.NoError(t, daemon.Start())
+	t.Cleanup(func() { daemon.Process.Kill() })
+	waitReader(filepath.Join(dir, "in.fifo"))
+
+	require.Eventually(t, func() bool {
+		sf, err := export.Read(filepath.Join(dir, "state.json"))
+		return err == nil && sf.Daemon.PID == daemon.Process.Pid
+	}, 15*time.Second, 100*time.Millisecond)
+	sf, err := export.Read(filepath.Join(dir, "state.json"))
+	require.NoError(t, err)
+	assert.Equal(t, state.Idle, sf.Sessions["alive"].State)
+	assert.Equal(t, state.Dead, sf.Sessions["exited"].State)
+	out, err := command(dir, cleanEnv(dir), "session", "%2").Output()
+	require.NoError(t, err)
+	assert.Empty(t, string(out))
 }
 
 func TestDoctorWithoutDaemonFails(t *testing.T) {

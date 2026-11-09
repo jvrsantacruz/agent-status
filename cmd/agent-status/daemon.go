@@ -51,6 +51,9 @@ func runDaemon() int {
 	defer st.Close()
 
 	sm := state.NewMachine()
+	if prev, err := export.Read(stateJSON); err == nil {
+		sm.Restore(prev.Sessions)
+	}
 	var c counters
 
 	rd := event.NewReader(fifo)
@@ -62,6 +65,8 @@ func runDaemon() int {
 		slog.Error("fifo ready", "error", err)
 		return 1
 	}
+
+	tick(sm, st, clock())
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

@@ -9,7 +9,7 @@ each window. It also knows which pane each session runs in, so a
 Claude Code or pi conversation. It is not a notifier and sends nothing off the machine.
 
 - **session**: one agent conversation, named by the id the agent gives it, running in one
-  pane; it ends when its process exits.
+  pane; it ends with an end event, or when its process exits and the dead keep time passes.
 - **harness**: the agent program that runs a session: claude, pi, or any program that
   reports its state.
 - **state**: working, question, idle, error, or dead; dead means the session's process is
@@ -27,7 +27,7 @@ _The use cases: each arrow is an actor and the goal it has with agent-status._
 
 ## requirements
 
-- `window-marks`: The tmux window list MUST mark each window whose active pane holds a session that is working, asking a question, failed or dead.
+- `window-marks`: The tmux window list MUST mark each window whose active pane holds a session that is working, asking a question, in error or dead.
 - `exit-clears`: When a session's process exits, the window list MUST show it dead and then stop showing it.
 - `restore-resumes`: When tmux-resurrect restores a pane that held a live claude or pi session, the pane MUST reopen that same session.
 - `readable-record`: The system MUST let any program its user runs read the harness, state and pane of every current session.

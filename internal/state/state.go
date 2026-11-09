@@ -118,6 +118,17 @@ func (m *Machine) PruneDead(ttl time.Duration, now time.Time) {
 	}
 }
 
+// Restore loads sessions a previous daemon left, so a restart forgets no
+// session that is still running; the next liveness pass clears the rest.
+func (m *Machine) Restore(sessions map[string]Session) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for id, s := range sessions {
+		m.sessions[id] = &s
+	}
+}
+
 // Snapshot returns a copy of the current state.
 func (m *Machine) Snapshot() map[string]Session {
 	m.mu.RLock()
