@@ -159,12 +159,14 @@ func TestEmitWithFullFIFOReturns(t *testing.T) {
 	dir := t.TempDir()
 	fifo := filepath.Join(dir, "in.fifo")
 	require.NoError(t, syscall.Mkfifo(fifo, 0o600))
-	// A daemon that holds the FIFO open and never reads it.
-	r, err := os.OpenFile(fifo, os.O_RDWR|syscall.O_NONBLOCK, 0)
+	// A daemon that holds the FIFO open and never reads it. Raw calls, so
+	// the fill stops at EAGAIN; Go's poller would wait for room on Linux.
+	fd, err := syscall.Open(fifo, syscall.O_RDWR|syscall.O_NONBLOCK, 0)
 	require.NoError(t, err)
-	t.Cleanup(func() { r.Close() })
+	t.Cleanup(func() { _ = syscall.Close(fd) })
 	for {
-		if _, err := r.Write(make([]byte, 512)); err != nil {
+		if _, err := syscall.Write(fd, make([]byte, 512)); err != nil {
+			require.ErrorIs(t, err, syscall.EAGAIN)
 			break
 		}
 	}
