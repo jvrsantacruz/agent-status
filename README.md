@@ -107,15 +107,13 @@ Removing the program keeps your data; the [Data](#data) section says where it is
 ## How it works
 
 ```
-agent hook ---- agent-status emit ----+
-                                      |  one JSON line per event
-other program ------------------------+--> FIFO --> agent-status daemon
-                                                         |
-                                                         +--> state.json --> agent-status sync --> tmux @agent_mark
-                                                         +--> state.db (last 7 days of events)
+agent hook or any program --> agent-status emit --> FIFO --> agent-status daemon
+                                one JSON line per event              |
+                                                                     +--> state.json --> agent-status sync --> tmux @agent_mark
+                                                                     +--> state.db (last 7 days of events)
 ```
 
-- `emit` writes one event to a FIFO and returns at once. If the daemon is not running, it says so
+- `emit` writes one event to a FIFO and returns within its write timeout. If the daemon is not running, it says so
   on stderr and exits 0, so it never stops the agent.
 - The daemon keeps the state of each session and writes `state.json`. Every 60 seconds it checks
   that each agent process still runs; a session whose process is gone shows as dead for 5 minutes,
@@ -128,10 +126,9 @@ other program ------------------------+--> FIFO --> agent-status daemon
 
 ## Event format
 
-Any program can write events, with `agent-status emit` or by writing JSON lines to the FIFO
-itself (`$XDG_RUNTIME_DIR/agent-status/in.fifo`, or `in.fifo` in the state directory). Keep each
-line within 512 bytes, newline included: a FIFO write is atomic only up to `PIPE_BUF`, which is 512
-on macOS, and a longer line can interleave with another agent's line.
+Any program reports events with `agent-status emit`. It refuses a line over 512 bytes: a FIFO
+write is atomic only up to `PIPE_BUF`, which is 512 on macOS, and a longer line could interleave
+with another agent's line.
 
 ```sh
 agent-status emit [--session ID] [--harness NAME] [--pid PID] [--pane PANE] [--claude-hook] <state> [message]
