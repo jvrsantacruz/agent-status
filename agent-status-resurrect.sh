@@ -7,6 +7,7 @@
 #
 #   agent-status-resurrect.sh <pane pid>
 
+# req: restore-resumes
 # Linked into resurrect's strategy directory, next to its default strategy.
 pane_pid="$1"
 command="$("$(dirname "$0")/ps.sh" "$pane_pid")"

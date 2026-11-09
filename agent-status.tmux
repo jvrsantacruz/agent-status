@@ -47,6 +47,21 @@ if [ "$(tmux show-options -gqv @agent-status-resurrect)" = "on" ]; then
 	if [ -n "$tpm_dir" ] && [ -d "$strategies" ]; then
 		ln -sf "$plugin_dir/agent-status-resurrect.sh" "$strategies/agent-status.sh"
 		tmux set-option -g @resurrect-save-command-strategy agent-status
+		# Resurrect replays only the programs on its list, which it adds to
+		# its defaults; false and :all: are the user's choice.
+		processes="$(tmux show-options -gqv @resurrect-processes)"
+		case "$processes" in
+		false | :all:) ;;
+		*)
+			for program in claude pi; do
+				case " $processes " in
+				*" $program "*) ;;
+				*) processes="$processes $program" ;;
+				esac
+			done
+			tmux set-option -g @resurrect-processes "${processes# }"
+			;;
+		esac
 	else
 		tmux display-message "agent-status: @agent-status-resurrect is on, but tmux-resurrect is not installed with TPM"
 	fi

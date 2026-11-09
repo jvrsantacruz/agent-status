@@ -129,11 +129,34 @@ func TestEmitFlagsForAnyAgent(t *testing.T) {
 	assert.Equal(t, float64(77), m["pid"])
 }
 
+// req: never-blocks
 func TestEmitWithoutDaemonExitsZero(t *testing.T) {
 	dir := t.TempDir()
 	out, err := command(dir, cleanEnv(dir, "AGENT_STATUS_SESSION=s"), "emit", "working").CombinedOutput()
 	assert.NoError(t, err)
 	assert.Contains(t, string(out), "daemon not running")
+}
+
+// req: never-blocks
+func TestEmitWithFullFIFOReturns(t *testing.T) {
+	dir := t.TempDir()
+	fifo := filepath.Join(dir, "in.fifo")
+	require.NoError(t, syscall.Mkfifo(fifo, 0o600))
+	// A daemon that holds the FIFO open and never reads it.
+	r, err := os.OpenFile(fifo, os.O_RDWR|syscall.O_NONBLOCK, 0)
+	require.NoError(t, err)
+	t.Cleanup(func() { r.Close() })
+	for {
+		if _, err := r.Write(make([]byte, 512)); err != nil {
+			break
+		}
+	}
+
+	start := time.Now()
+	out, err := command(dir, cleanEnv(dir, "AGENT_STATUS_SESSION=s"), "emit", "working").CombinedOutput()
+	assert.NoError(t, err)
+	assert.Contains(t, string(out), "full")
+	assert.Less(t, time.Since(start), 2*time.Second)
 }
 
 func TestEmitUsageErrorsExitOne(t *testing.T) {
@@ -185,19 +208,21 @@ func TestRender(t *testing.T) {
 	}
 }
 
+// req: restore-resumes
 func TestSession(t *testing.T) {
 	dir := t.TempDir()
 	sf := `{"sessions":{
 		"old":{"harness":"claude","state":"idle","tmux_pane":"%0","updated_at":100},
 		"new":{"harness":"claude","state":"working","tmux_pane":"%0","updated_at":200},
 		"p1":{"harness":"pi","state":"idle","tmux_pane":"%1","updated_at":100},
+		"exited":{"harness":"pi","state":"idle","pid":2147483646,"tmux_pane":"%1","updated_at":200},
 		"gone":{"harness":"claude","state":"dead","tmux_pane":"%2","updated_at":100}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.json"), []byte(sf), 0o600))
 
 	cases := map[string]string{
 		"%0": "claude new\n", // newest session on the pane wins
-		"%1": "pi p1\n",
-		"%2": "", // a dead session is not resumed
+		"%1": "pi p1\n",      // a newer session whose process exited is skipped
+		"%2": "",             // a dead session is not resumed
 		"%9": "",
 	}
 	for pane, want := range cases {
