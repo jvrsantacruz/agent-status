@@ -10,6 +10,7 @@ tmux server loads each pane's marker into `@agent_mark`, which the window list r
 go build ./cmd/agent-status                         # build
 go test -race ./...                                 # unit tests
 go test -race -tags e2e ./...                       # plus end to end: real binary, daemon, FIFO
+tools/resurrect-e2e                                 # real tmux-resurrect save and restore on a scratch server
 golangci-lint run --build-tags e2e ./...            # lint, config in .golangci.yml
 pre-commit run --all-files                          # every check CI runs
 goreleaser release --snapshot --clean --skip=sbom   # build release archives and packages locally

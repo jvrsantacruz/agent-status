@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# resurrect-e2e - save and restore two claude panes with the real
+# tmux-resurrect on a scratch tmux server, and check that the pane with a
+# live session comes back resumed and the pane whose session exited does not.
+# Touches no tmux server, save or state of yours.
+#
+#   tools/resurrect-e2e [tmux-resurrect directory]
+# req: restore-resumes
+set -eu
+repo="$(cd "$(dirname "$0")/.." && pwd)"
+resurrect="${1:-$HOME/.tmux/plugins/tmux-resurrect}"
+[ -x "$resurrect/scripts/save.sh" ] || { echo "no tmux-resurrect in $resurrect" >&2; exit 2; }
+
+T="$(mktemp -d)"
+S() { tmux -L "agent-status-e2e-$$" -f /dev/null "$@"; }
+trap 'S kill-server 2>/dev/null || :; pkill -f "$T/bin/claude" 2>/dev/null || :; rm -rf "$T"' EXIT
+mkdir -p "$T/plugins" "$T/bin" "$T/state" "$T/save"
+cp -R "$resurrect" "$T/plugins/tmux-resurrect"
+ln -s "$repo" "$T/plugins/agent-status"
+(cd "$repo" && go build -o "$T/bin/agent-status" ./cmd/agent-status)
+# A long-running program named claude; a symlink keeps macOS code signing intact.
+ln -s "$(command -v sleep)" "$T/bin/claude"
+export PATH="$T/bin:$PATH" AGENT_STATUS_STATE_DIR="$T/state" AGENT_STATUS_RUNTIME_DIR="$T/state"
+
+load() {
+	S set-environment -g TMUX_PLUGIN_MANAGER_PATH "$T/plugins/"
+	S set-environment -g PATH "$PATH"
+	S set-environment -g AGENT_STATUS_STATE_DIR "$T/state"
+	S set -g @resurrect-dir "$T/save"
+	S set -g @agent-status-resurrect on
+	S run-shell "$T/plugins/agent-status/agent-status.tmux"
+}
+
+S new -d -s main -x 120 -y 40 "env PATH=$PATH sh"
+load
+S split-window -t main "env PATH=$PATH sh"
+S send-keys -t main.0 "claude 600" C-m
+S send-keys -t main.1 "claude 601" C-m
+sleep 1
+pid0="$(pgrep -P "$(S display -p -t main.0 '#{pane_pid}')" | head -1)"
+cat >"$T/state/state.json" <<J
+{"schema_version":1,"sessions":{
+ "live-1":{"harness":"claude","state":"working","pid":$pid0,"tmux_pane":"$(S display -p -t main.0 '#{pane_id}')","updated_at":2},
+ "gone-1":{"harness":"claude","state":"idle","pid":2147483646,"tmux_pane":"$(S display -p -t main.1 '#{pane_id}')","updated_at":2}}}
+J
+S run-shell "$T/plugins/tmux-resurrect/scripts/save.sh quiet"
+S kill-server
+sleep 1
+
+S new -d -s scratch "env PATH=$PATH sh"
+load
+S run-shell "$T/plugins/tmux-resurrect/scripts/restore.sh"
+sleep 2
+got0="$(S capture-pane -p -t main.0 | grep -o 'claude.*' | head -1)"
+got1="$(S capture-pane -p -t main.1 | grep -o 'claude.*' | head -1)"
+
+fail=0
+check() { if [ "$2" = "$3" ]; then echo "ok    $1: $2"; else echo "FAIL  $1: got '$2', want '$3'"; fail=1; fi; }
+check "live session resumed" "$got0" "claude --resume live-1"
+check "exited session not resumed" "$got1" "claude 601"
+exit "$fail"

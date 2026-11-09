@@ -107,7 +107,7 @@ _Session states. A harness event moves to the state it names. Dead and removal s
 
 fixtures: [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go): the real binary runs in a clean environment, fed emit calls and saved Claude Code hook inputs, or hand-written state.json files, for every state, a dead session, a restart and a missing daemon; expected outputs from hand-checked state.json, render and session values; compared exactly.
 
-- `restore-resumes` (demonstration, [resurrect strategy](https://github.com/jvrsantacruz/agent-status/blob/main/agent-status-resurrect.sh)): a real save and restore on a scratch tmux server types the resume command for a live session and the plain command for an exited one.
+- `restore-resumes` (test, [resurrect-e2e](https://github.com/jvrsantacruz/agent-status/blob/main/tools/resurrect-e2e)): a real save and restore on a scratch tmux server types the resume command for a live session and the plain command for an exited one.
 - `never-blocks` (test, [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go)): with no daemon, and with a daemon that never reads a full FIFO, emit returns within its write timeout and exits 0.
 - `private-text` (test, [hook tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/hook_test.go)): the message taken from hook input never carries the prompt, a tool input or error text.
 - `local-only` (inspection, [AGENTS.md](https://github.com/jvrsantacruz/agent-status/blob/main/AGENTS.md)): no package opens a network connection.
