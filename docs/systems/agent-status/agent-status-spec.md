@@ -9,17 +9,16 @@ FIFO and returns at once. The **daemon** reads the FIFO, keeps each session's st
 event history, marks a session dead when its process exits, and writes **state.json**. In
 each tmux server, **sync** reads state.json once a second and sets each pane's marker
 option, which the window format reads. The **tmux plugin** starts sync and, when resurrect integration is on, gives resurrect a save
-strategy that saves an agent pane's command with its session id. **doctor** reads the history to explain a session; the daemon prunes it at
-an age set in `cmd/agent-status/daemon.go`.
+strategy that saves an agent pane's command with its session id. **doctor** reads the history to explain a session.
 
 ```mermaid
 flowchart LR
-  agent([harness]) -- emit --> fifo@{ shape: h-cyl, label: "FIFO queue" }
-  fifo --> daemon[daemon]
+  agent([harness]) -- agent-status emit --> fifo@{ shape: h-cyl, label: "FIFO queue" }
+  fifo --> daemon[agent-status daemon]
   daemon --> db[(event history)]
-  db --> doctor[doctor]
+  db --> doctor[agent-status doctor]
   daemon --> state[(state.json)]
-  state --> sync[sync]
+  state --> sync[agent-status sync]
   sync -- pane marker --> tmux([tmux window list])
   plugin[tmux plugin] -- starts --> sync
   state -- agent-status session --> plugin
