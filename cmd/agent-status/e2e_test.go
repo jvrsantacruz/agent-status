@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/jvrsantacruz/agent-status/internal/export"
+	"github.com/jvrsantacruz/agent-status/internal/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -315,5 +316,64 @@ func TestEmitClaudeHook(t *testing.T) {
 			assert.Equal(t, c.wantMessage, m["message"])
 			assert.Equal(t, "claude", m["harness"])
 		})
+	}
+}
+
+// A real tmux server on a private socket: sync loads each pane's marker into
+// @agent_mark, so the window list reads it and runs no job.
+func TestSyncLoadsMarkersIntoTmux(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	dir := t.TempDir()
+	// A socket path must fit in 104 bytes; a temp dir on macOS may not.
+	sockDir, err := os.MkdirTemp("/tmp", "as")
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(sockDir) })
+	sock := filepath.Join(sockDir, "s")
+	tmux := func(args ...string) string {
+		out, err := exec.Command("tmux", append([]string{"-S", sock, "-f", "/dev/null"}, args...)...).CombinedOutput()
+		require.NoError(t, err, string(out))
+		return strings.TrimSpace(string(out))
+	}
+	tmux("new-session", "-d", "-s", "t")
+	t.Cleanup(func() { _ = exec.Command("tmux", "-S", sock, "kill-server").Run() })
+	pane := tmux("list-panes", "-F", "#{pane_id}")
+	env := cleanEnv(dir, "TMUX="+sock+",1,0")
+
+	write := func(st state.SessionState) {
+		require.NoError(t, export.Write(filepath.Join(dir, "state.json"), export.StateFile{
+			SchemaVersion: export.SchemaVersion,
+			Sessions:      map[string]state.Session{"s": {Harness: "claude", State: st, Pane: pane}},
+		}))
+	}
+	mark := func() string { return tmux("display-message", "-p", "-t", pane, "#{@agent_mark}") }
+
+	write(state.Working)
+	out, err := command(dir, env, "sync", "--once").CombinedOutput()
+	require.NoError(t, err, string(out))
+	assert.Equal(t, "#{E:@agent_mark_working}", mark())
+
+	write(state.Idle)
+	require.NoError(t, command(dir, env, "sync", "--once").Run())
+	assert.Empty(t, mark(), "idle unsets the marker")
+
+	// The loop: one per server; it follows changes and exits with the server.
+	loop := command(dir, env, "sync")
+	require.NoError(t, loop.Start())
+	t.Cleanup(func() { loop.Process.Kill() })
+	write(state.Question)
+	assert.Eventually(t, func() bool { return mark() == "#{E:@agent_mark_question}" }, 3*time.Second, 50*time.Millisecond)
+	second := command(dir, env, "sync")
+	require.NoError(t, second.Run(), "a second sync for the same server exits 0 at once")
+
+	tmux("kill-server")
+	done := make(chan error, 1)
+	go func() { done <- loop.Wait() }()
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("sync did not exit after the tmux server was gone")
 	}
 }

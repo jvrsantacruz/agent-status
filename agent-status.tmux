@@ -9,8 +9,8 @@
 # Options, set before TPM runs:
 #   @agent-status-auto-format 'on'   prefix window-status-format and
 #                                    window-status-current-format (default)
-#   @agent-status-auto-format 'off'  you add the render call yourself:
-#                                    #(agent-status render '#{pane_id}')
+#   @agent-status-auto-format 'off'  you add the marker yourself:
+#                                    #{E:@agent_mark}
 #   @agent_mark_working, @agent_mark_question, @agent_mark_error,
 #   @agent_mark_dead                 the glyph and colours of each state
 
@@ -32,17 +32,24 @@ set_default @agent_mark_question '#[fg=colour3,bold]? #[default]'
 set_default @agent_mark_error '#[fg=colour1]✗ #[default]'
 set_default @agent_mark_dead '#[fg=colour8,dim]x #[default]'
 
+# One sync per server reads state.json and loads each pane's marker into
+# @agent_mark; the window list only reads it, so a redraw runs no job.
+tmux run-shell -b "'$bin' sync"
+
 [ "$(tmux show-options -gqv @agent-status-auto-format)" = "off" ] && exit 0
 
 # After the format's leading spaces, so the marker is one space from the
 # window name and not against the previous window: " #I:#W " becomes
-# " ▶ #I:#W ".
-render="#($bin render '#{pane_id}')"
+# " ▶ #I:#W ". A format from an older plugin loses its render job.
+mark='#{E:@agent_mark}'
 for option in window-status-format window-status-current-format; do
 	current="$(tmux show-options -gqv "$option")"
+	current="${current//"#($bin render '#{pane_id}')"/}"
+	current="${current//"#(agent-status render '#{pane_id}')"/}"
 	lead="${current%%[! ]*}"
 	case "$current" in
-	*"render '#{pane_id}'"*) ;;
-	*) tmux set-option -g "$option" "$lead$render${current#"$lead"}" ;;
+	*"$mark"*) ;;
+	*) current="$lead$mark${current#"$lead"}" ;;
 	esac
+	tmux set-option -g "$option" "$current"
 done

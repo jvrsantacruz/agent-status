@@ -1,8 +1,8 @@
 # agent-status
 
 A Go daemon and CLI that shows in the tmux window list what each AI coding agent is doing.
-Agents emit events to a FIFO; the daemon keeps state and writes `state.json`; tmux calls
-`render` per window. README.md "How it works" has the diagram.
+Agents emit events to a FIFO; the daemon keeps state and writes `state.json`; one `sync` per
+tmux server loads each pane's marker into `@agent_mark`, which the window list reads. README.md "How it works" has the diagram.
 
 ## Commands
 
@@ -43,7 +43,7 @@ rebuilt: fix forward with a new patch version.
 
 | Path | What |
 |---|---|
-| `cmd/agent-status/` | Commands: `daemon`, `emit`, `render`, `doctor`, `version`; `paths.go` is the one place paths are decided |
+| `cmd/agent-status/` | Commands: `daemon`, `emit`, `sync`, `render`, `doctor`, `version`; `paths.go` is the one place paths are decided |
 | `internal/event` | Event type and FIFO reader |
 | `internal/state` | State machine, one session per `session_id` |
 | `internal/store` | SQLite event history, 7 days |
@@ -62,7 +62,7 @@ rebuilt: fix forward with a new patch version.
 - `emit` must never block and never exit 2: it runs inside agent hooks.
 - An event line is at most 512 bytes (`event.MaxLine`), the `PIPE_BUF` of macOS: longer writes to a
   FIFO are not atomic and interleave. Test FIFO changes on macOS too; CI does.
-- `render` prints nothing on any error: its output is the tmux status line. Errors belong in
+- `render` and `sync` print nothing on any error: their output is the tmux status line. Errors belong in
   `doctor` and the daemon log.
 - The daemon logs one wide event per unit of work, not scattered lines.
 - No message text on disk outside `state.json`; files 0600, directories 0700; no network access.

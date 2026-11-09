@@ -124,7 +124,7 @@ func wiring(report func(string, string, string), check func(bool, string, string
 		mark, _ := exec.Command("tmux", "show-options", "-gqv", "@agent_mark_working").Output()
 		check(len(strings.TrimSpace(string(mark))) > 0, "tmux plugin", "@agent_mark_working is "+strconv.Quote(strings.TrimSpace(string(mark))))
 		format, _ := exec.Command("tmux", "show-options", "-gqv", "window-status-format").Output()
-		check(strings.Contains(string(format), "agent-status render"), "tmux format", "window-status-format calls agent-status render")
+		check(strings.Contains(string(format), "@agent_mark}"), "tmux format", "window-status-format reads @agent_mark")
 	}
 	settings := filepath.Join(os.Getenv("HOME"), ".claude", "settings.json")
 	if data, err := os.ReadFile(settings); err == nil {

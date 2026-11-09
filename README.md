@@ -111,7 +111,7 @@ agent hook ---- agent-status emit ----+
                                       |  one JSON line per event
 other program ------------------------+--> FIFO --> agent-status daemon
                                                          |
-                                                         +--> state.json --> agent-status render --> tmux
+                                                         +--> state.json --> agent-status sync --> tmux @agent_mark
                                                          +--> state.db (last 7 days of events)
 ```
 
@@ -120,8 +120,11 @@ other program ------------------------+--> FIFO --> agent-status daemon
 - The daemon keeps the state of each session and writes `state.json`. Every 60 seconds it checks
   that each agent process still runs; a session whose process is gone shows as dead for 5 minutes,
   then disappears.
-- tmux runs `agent-status render <pane>` for each window. It prints a reference to the tmux option
-  `@agent_mark_<state>`, so the plugin or your theme decides glyphs and colours.
+- The plugin starts one `agent-status sync` per tmux server. Once a second it reads `state.json`
+  and sets the pane option `@agent_mark` on each pane whose marker changed, to a reference to
+  `@agent_mark_<state>`, so the plugin or your theme decides glyphs and colours. The window list
+  only reads the option: a redraw runs no command, and an unchanged state redraws nothing.
+  `agent-status render <pane>` prints the same reference, for themes that call it.
 
 ## Event format
 
@@ -195,7 +198,7 @@ tmux options, set before TPM runs:
 | `@agent_mark_question` | `#[fg=colour3,bold]? #[default]` |
 | `@agent_mark_error` | `#[fg=colour1]✗ #[default]` |
 | `@agent_mark_dead` | `#[fg=colour8,dim]x #[default]` |
-| `@agent-status-auto-format` | `on`: the plugin puts the marker at the start of `window-status-format` and `window-status-current-format`, after their leading spaces. `off`: add `#(agent-status render '#{pane_id}')` yourself |
+| `@agent-status-auto-format` | `on`: the plugin puts the marker at the start of `window-status-format` and `window-status-current-format`, after their leading spaces. `off`: add `#{E:@agent_mark}` yourself |
 
 ## Troubleshooting
 
@@ -207,7 +210,7 @@ ok    version       daemon v0.2.0 pid 4184570, this binary v0.2.0
 ok    round trip    event reached state.json in 50 ms
 ok    render        marker "#{E:@agent_mark_question}"
 ok    tmux plugin   @agent_mark_working is "#[fg=colour6]▶ #[default]"
-ok    tmux format   window-status-format calls agent-status render
+ok    tmux format   window-status-format reads @agent_mark
 warn  pid           no pid: this session is never cleared when the agent exits; pass emit --pid
 ```
 
