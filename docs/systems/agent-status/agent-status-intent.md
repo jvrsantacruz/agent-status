@@ -37,8 +37,3 @@ _The use cases: each arrow is an actor and the goal it has with agent-status._
 - `never-blocks`: If the system is down or slow, then reporting a state change MUST NOT block the harness.
 - `private-text`: When reading a Claude Code hook's input, the system MUST NOT keep its prompt, tool input or error text.
 - `local-only`: The system MUST NOT use the network.
-
-### assumptions
-
-- `id-resume`: The harness MUST reopen a session from its id given on the command line.
-- `resurrect-installed`: tmux-resurrect MUST be installed with TPM, saving and restoring panes, and running a save command strategy installed in its plugin directory.

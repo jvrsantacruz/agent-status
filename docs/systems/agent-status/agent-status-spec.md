@@ -30,7 +30,7 @@ _The containers and files of one machine; an arrow is data flowing from producer
 ## building blocks
 
 **agent-status** (service, lives in `cmd/agent-status`): one binary. `daemon` runs as a
-systemd user unit or a launchd agent, independent of tmux, and is the only writer of
+systemd user unit or a launchd agent and is the only writer of
 state.json and the event history. `sync` is a loop, one per tmux server, that ends with the
 server. `emit`, `session` and `render` are short-lived. emit exits 1 on a usage error: no state, no
 session id, or fields too long for one FIFO line; on any other failure it exits 0. session
@@ -51,15 +51,14 @@ tell when the session ends. Format:
 Requirements: `never-blocks`, `private-text`.
 
 **daemon -> the user's programs** (file, state.json, auth file permissions)
-state.json, replaced whole after each change, described by its
+Replaced whole after each change, so a reader never sees half a file. Fields are only added;
+a removed or changed one raises the version of its
 [schema](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json).
-Readers need a complete file at every read; fields are only added, and a removed or changed
-field raises the schema version.
 Requirements: `readable-record`.
 
 **sync -> tmux** (ui, tmux pane options, auth tmux server socket)
-sync sets the pane option `@agent_mark` where a pane's marker changed, to the marker option
-of its state. The window format reads it, so a redraw runs no command.
+sync sets the pane option `@agent_mark` where a marker changed; the window format reads it,
+so a redraw runs no command.
 Requirements: `window-marks`.
 
 **tmux-resurrect -> tmux plugin** (file, save command strategy, auth none: runs as the user)
@@ -67,7 +66,10 @@ On save, resurrect records what the strategy prints for a pane's process id: the
 command when the pane holds a live session of its program. On restore it types that command
 when its restore list matches the program; a user's inline strategy for claude or pi
 replaces it.
-Requirements: `restore-resumes`, `resurrect-installed`, `id-resume`.
+The plugin needs tmux-resurrect installed with TPM, since resurrect runs strategies only from
+its own directory, and each harness to reopen a session from its id: `claude --resume`,
+`pi --session`.
+Requirements: `restore-resumes`.
 
 ## data model
 
@@ -101,14 +103,14 @@ _Session states. Inside live, an event moves to the state it names. Dead and rem
 - **state.json unreadable**: sync skips the pass and leaves the markers as they were; session prints nothing, so resurrect saves the plain command and the restore starts a new session.
 - **agent-status too old**: the plugin shows a message and leaves resurrect's strategy as it was.
 - **Another save strategy set**: the plugin shows a message and leaves resurrect's strategy as it was; agent panes are saved with their plain command.
-- **Session without a process id**: never marked dead; it stays until its end event, and doctor reports it.
-- **Pane without a live session**: an agent that has sent no event the daemon received, or whose process exited, is saved with its plain command, and the restore starts a new session.
+- **Session without a process id**: never marked dead, it stays until its end event; doctor reports it.
+- **Pane without a live session**: an agent with no event received, or whose process exited, is saved with its plain command; the restore starts a new session.
 
 ## validation
 
-fixtures: [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go): the real binary is built and run in a clean environment, fed emit calls and saved Claude Code hook inputs through its FIFO, or given hand-written state.json files, for every state, a dead session and a missing daemon; expected outputs from hand-checked state.json, render and session values; compared exactly.
+fixtures: [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go): the real binary runs in a clean environment, fed emit calls and saved Claude Code hook inputs, or hand-written state.json files, for every state, a dead session, a restart and a missing daemon; expected outputs from hand-checked state.json, render and session values; compared exactly.
 
-- `restore-resumes` (demonstration, [resurrect strategy](https://github.com/jvrsantacruz/agent-status/blob/main/agent-status-resurrect.sh)): run on live panes, each pane with a live session prints its resume command and every other pane resurrect's default command.
+- `restore-resumes` (demonstration, [resurrect strategy](https://github.com/jvrsantacruz/agent-status/blob/main/agent-status-resurrect.sh)): a real save and restore on a scratch tmux server types the resume command for a live session and the plain command for an exited one.
 - `never-blocks` (test, [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go)): with no daemon, and with a daemon that never reads a full FIFO, emit returns within its write timeout and exits 0.
 - `private-text` (test, [hook tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/hook_test.go)): the message taken from hook input never carries the prompt, a tool input or error text.
 - `local-only` (inspection, [AGENTS.md](https://github.com/jvrsantacruz/agent-status/blob/main/AGENTS.md)): no package opens a network connection.
