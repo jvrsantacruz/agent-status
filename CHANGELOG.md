@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- tmux: the window list no longer blinks. The plugin ran `agent-status render` once per window on
+  every `status-interval`, and tmux redrew the status line each time one returned. Now one
+  `agent-status sync` per tmux server reads `state.json` once a second and sets the pane option
+  `@agent_mark` only where the marker changed; the format reads `#{E:@agent_mark}` and runs no
+  command. Reloading the plugin replaces an old `render` call in the format. `render` stays for
+  themes that call it.
+- `doctor` checks that `window-status-format` reads `@agent_mark`.
+
 ## 0.2.3
 
 - `state.json` has a schema, [schema/state.schema.json](schema/state.schema.json), and a
