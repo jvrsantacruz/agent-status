@@ -82,20 +82,17 @@ Requirements: `restore-resumes`.
 
 ```mermaid
 stateDiagram-v2
-  state live {
-    working --> question
-    question --> working
-    working --> idle
-    working --> error
-  }
+  live: live (working, question, idle or error)
   [*] --> live: harness event
+  live --> live: harness event
   live --> dead: process exited
   dead --> live: harness event
   live --> [*]: end event
+  dead --> [*]: end event
   dead --> [*]: dead keep time passed
 ```
 
-_Session states. Inside live, an event moves to the state it names. Dead and removal serve `exit-clears`._
+_Session states. A harness event moves to the state it names. Dead and removal serve `exit-clears`._
 
 ## failure modes
 
