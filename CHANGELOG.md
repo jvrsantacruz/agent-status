@@ -2,6 +2,12 @@
 
 ## 0.3.1
 
+- tmux: markers show again after tmux restarts. tmux loads the plugin before any session exists,
+  and `sync` took that empty server for a gone one and exited, so no window had a marker until
+  the plugin was reloaded.
+
+## 0.3.1
+
 - tmux-resurrect: with `set -g @agent-status-resurrect 'on'`, a pane running claude or pi is saved
   with its session id, so a restore resumes that session instead of starting a new one.
 - `agent-status session <pane>` prints the harness and id of the live session on a pane.
