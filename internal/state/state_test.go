@@ -213,3 +213,40 @@ func TestPruneDeadOnlyDead(t *testing.T) {
 	sm.PruneDead(1*time.Minute, now)
 	assert.Len(t, sm.Snapshot(), 2) // alive sessions not affected
 }
+
+func declared(sid, state, msg string) event.Event {
+	return event.Event{SessionID: sid, Event: state, Message: msg, Declared: true}
+}
+
+// A Claude turn in which the agent runs `emit done`: the hooks after it send
+// working, then the turn's end sends idle.
+func TestDeclaredOutcomeShowsWhenTheTurnEnds(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		events  []event.Event
+		want    SessionState
+		message string
+	}{
+		{"done survives the hooks after it", []event.Event{e("s", "working"), declared("s", "done", "tests pass"),
+			e("s", "working"), e("s", "idle")}, Done, "tests pass"},
+		{"declared error", []event.Event{e("s", "working"), declared("s", "error", "cannot reach the DB"),
+			e("s", "working"), e("s", "idle")}, Error, "cannot reach the DB"},
+		{"harness error wins over a declared done", []event.Event{declared("s", "done", ""), e("s", "error")}, Error, ""},
+		{"the next prompt clears done", []event.Event{declared("s", "done", ""), e("s", "idle"), e("s", "working")}, Working, ""},
+		{"used once", []event.Event{declared("s", "done", ""), e("s", "idle"), e("s", "working"), e("s", "idle")}, Idle, ""},
+		{"undeclared done, as a judge sends it", []event.Event{e("s", "idle"), e("s", "done")}, Done, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			sm := NewMachine()
+			for _, ev := range tc.events {
+				sm.Apply(ev)
+			}
+			s := sm.Snapshot()["s"]
+			assert.Equal(t, tc.want, s.State)
+			assert.Equal(t, tc.message, s.Message)
+		})
+	}
+}

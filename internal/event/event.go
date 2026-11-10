@@ -20,6 +20,9 @@ type Event struct {
 	Pane        string `json:"tmux_pane"`
 	TimestampMs int64  `json:"ts"`
 	Message     string `json:"message"`
+	// Declared marks a done or error the agent states about its own work.
+	// It holds until the turn ends, past the hooks that fire after it.
+	Declared bool `json:"declared,omitempty"`
 }
 
 func (e *Event) Time() time.Time {

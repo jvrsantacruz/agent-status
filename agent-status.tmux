@@ -12,7 +12,7 @@
 #   @agent-status-auto-format 'off'  you add the marker yourself:
 #                                    #{E:@agent_mark}
 #   @agent_mark_working, @agent_mark_question, @agent_mark_error,
-#   @agent_mark_dead                 the glyph and colours of each state
+#   @agent_mark_done, @agent_mark_dead                the glyph and colours of each state
 #   @agent-status-resurrect 'on'     tmux-resurrect saves each agent pane
 #                                    with its session, so a restore resumes it
 
@@ -32,6 +32,7 @@ set_default() {
 set_default @agent_mark_working '#[fg=colour6]▶ #[default]'
 set_default @agent_mark_question '#[fg=colour3,bold]? #[default]'
 set_default @agent_mark_error '#[fg=colour1]✗ #[default]'
+set_default @agent_mark_done '#[fg=colour2]✓ #[default]'
 set_default @agent_mark_dead '#[fg=colour8,dim]x #[default]'
 
 # One sync per server reads state.json and loads each pane's marker into

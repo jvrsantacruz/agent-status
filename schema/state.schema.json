@@ -35,7 +35,7 @@
       "additionalProperties": false,
       "properties": {
         "harness": {"type": "string", "description": "The agent, such as claude or pi. May be empty."},
-        "state": {"enum": ["working", "question", "idle", "error", "dead"]},
+        "state": {"enum": ["working", "question", "idle", "error", "done", "dead"]},
         "pid": {"type": "integer", "minimum": 0, "description": "0 when the agent gave none: the session never dies."},
         "tmux_pane": {"type": "string", "description": "Such as %3. Empty outside tmux."},
         "dead_since": {"type": ["integer", "null"], "description": "Set when state is dead; the session is removed 5 minutes later."},
@@ -43,8 +43,18 @@
         "message": {"type": "string", "description": "At most a few hundred bytes; never a prompt or a tool's input."},
         "reason": {
           "type": "string",
-          "pattern": "^(event:[^()]+|event:unknown\\(.*\\)|liveness:pid_gone)$",
-          "description": "What set state: event:<name>, event:unknown(<name>) or liveness:pid_gone."
+          "pattern": "^(event:[^()]+|event:unknown\\(.*\\)|declared:(done|error)|liveness:pid_gone)$",
+          "description": "What set state: event:<name>, event:unknown(<name>), declared:<state> or liveness:pid_gone."
+        },
+        "declared": {
+          "description": "Absent unless the agent declared done or error in the current turn; it becomes the state when the turn ends.",
+          "type": "object",
+          "required": ["state", "message"],
+          "additionalProperties": false,
+          "properties": {
+            "state": {"enum": ["done", "error"]},
+            "message": {"type": "string"}
+          }
         }
       }
     }

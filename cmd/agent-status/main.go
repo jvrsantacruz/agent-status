@@ -24,9 +24,10 @@ const usage = `usage: agent-status <command> [arguments]
 
 commands:
   daemon                          read events, keep state, write state.json
-  emit [flags] <state> [message]  send one event: working, question, idle, error, end;
+  emit [flags] <state> [message]  send one event: working, question, idle, error, done, end;
                                   --claude-hook inside a Claude Code hook
   render <pane>                   print the tmux marker for a pane id, such as %3
+  judge [flags]                   classify how a Claude turn ended; emit --judge starts it
   sync [--once]                   keep each tmux pane's @agent_mark current; the plugin starts it
   session <pane>                  print the harness and session id on a pane
   doctor                          check the installation end to end
@@ -54,6 +55,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runSession(args[1:], stdout)
 	case "render":
 		return runRender(args[1:], stdout)
+	case "judge":
+		return runJudge(args[1:], stderr)
 	case "sync":
 		return runSync(args[1:], stderr)
 	case "doctor":

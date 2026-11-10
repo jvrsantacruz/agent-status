@@ -19,7 +19,7 @@ import (
 // writeWait bounds how long emit waits on a full FIFO.
 const writeWait = time.Second
 
-var states = map[string]bool{"working": true, "question": true, "idle": true, "error": true, "end": true}
+var states = map[string]bool{"working": true, "question": true, "idle": true, "error": true, "done": true, "end": true}
 
 // runEmit never exits 2: a Claude Code hook that exits 2 blocks the agent.
 // A daemon that is not running is reported on stderr with exit 0, so the
@@ -36,8 +36,10 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 	pane := fs.String("pane", os.Getenv("TMUX_PANE"), "tmux pane id of the agent; from $TMUX_PANE")
 	hook := fs.Bool("claude-hook", false,
 		"read the JSON Claude Code gives a hook on stdin: session id, and a message from the notification text or the tool name")
+	judge := fs.Bool("judge", false,
+		"with --claude-hook on Stop: a small model reads the turn and sets done, question or error; see agent-status judge")
 	fs.Usage = func() {
-		fmt.Fprintln(stderr, "usage: agent-status emit [flags] <working|question|idle|error|end> [message]")
+		fmt.Fprintln(stderr, "usage: agent-status emit [flags] <working|question|idle|error|done|end> [message]")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -51,10 +53,12 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 		return 1
 	}
 	msg := fs.Arg(1)
+	var h claudeHook
 	if *hook {
 		// A hook must never fail the agent: bad input is reported and the
 		// event goes out with what the flags and environment give.
-		h, err := readClaudeHook(stdin)
+		var err error
+		h, err = readClaudeHook(stdin)
 		if err != nil {
 			fmt.Fprintf(stderr, "agent-status emit: %v\n", err)
 		}
@@ -81,11 +85,19 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 		Pane:        *pane,
 		TimestampMs: clock().UnixMilli(),
 		Message:     msg,
+		// An agent states its own outcome; a hook reports what the harness saw.
+		Declared: !*hook && (fs.Arg(0) == "done" || fs.Arg(0) == "error"),
 	}
 	if err := send(e); err != nil {
 		fmt.Fprintf(stderr, "agent-status emit: %v\n", err)
 		if errors.Is(err, event.ErrTooLong) {
 			return 1
+		}
+		return 0
+	}
+	if *judge && h.Event == "Stop" && h.Transcript != "" {
+		if err := startJudge(e, h.Transcript); err != nil {
+			fmt.Fprintf(stderr, "agent-status emit: judge: %v\n", err)
 		}
 	}
 	return 0
