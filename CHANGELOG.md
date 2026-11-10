@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.1
+## 0.3.2
 
 - tmux: markers show again after tmux restarts. tmux loads the plugin before any session exists,
   and `sync` took that empty server for a gone one and exited, so no window had a marker until
