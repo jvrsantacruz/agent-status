@@ -41,8 +41,7 @@ func runSync(args []string, stderr io.Writer) int {
 		defer lock.Close()
 	}
 	for {
-		if err := syncPass(); err != nil {
-			// The server is gone, or tmux cannot be run: nothing left to serve.
+		if err := syncPass(); err != nil && !serverAlive() {
 			return 0
 		}
 		if once {
@@ -70,6 +69,12 @@ func lockServer(tmuxEnv string) (*os.File, error) {
 		return nil, err
 	}
 	return f, nil
+}
+
+// serverAlive tells a server with no session yet, as while it reads its
+// config at start, from one that is gone.
+func serverAlive() bool {
+	return exec.Command("tmux", "show-options", "-gqv", "status").Run() == nil
 }
 
 // syncPass returns an error only when tmux cannot be asked for its panes. A

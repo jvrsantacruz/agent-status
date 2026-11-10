@@ -478,3 +478,40 @@ func TestSyncLoadsMarkersIntoTmux(t *testing.T) {
 		t.Fatal("sync did not exit after the tmux server was gone")
 	}
 }
+
+// At start tmux loads the plugin before any session exists: sync must wait
+// for the first session, not take the empty server for a gone one.
+func TestSyncStartedBeforeAnySession(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	dir := t.TempDir()
+	sockDir, err := os.MkdirTemp("/tmp", "as")
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(sockDir) })
+	sock := filepath.Join(sockDir, "s")
+	tmux := func(args ...string) string {
+		out, err := exec.Command("tmux", append([]string{"-S", sock, "-f", "/dev/null"}, args...)...).CombinedOutput()
+		require.NoError(t, err, string(out))
+		return strings.TrimSpace(string(out))
+	}
+	tmux("start-server", ";", "set-option", "-g", "exit-empty", "off")
+	t.Cleanup(func() { _ = exec.Command("tmux", "-S", sock, "kill-server").Run() })
+	env := cleanEnv(dir, "TMUX="+sock+",1,0")
+
+	loop := command(dir, env, "sync")
+	require.NoError(t, loop.Start())
+	t.Cleanup(func() { _ = loop.Process.Kill() })
+	time.Sleep(2 * syncEvery)
+	require.NoError(t, loop.Process.Signal(syscall.Signal(0)), "sync is still running on a server with no session")
+
+	tmux("new-session", "-d", "-s", "t")
+	pane := tmux("list-panes", "-F", "#{pane_id}")
+	require.NoError(t, export.Write(filepath.Join(dir, "state.json"), export.StateFile{
+		SchemaVersion: export.SchemaVersion,
+		Sessions:      map[string]state.Session{"s": {Harness: "claude", State: state.Working, Pane: pane}},
+	}))
+	assert.Eventually(t, func() bool {
+		return tmux("display-message", "-p", "-t", pane, "#{@agent_mark}") == "#{E:@agent_mark_working}"
+	}, 3*time.Second, 50*time.Millisecond)
+}
