@@ -66,7 +66,7 @@ rebuilt: fix forward with a new patch version.
 - `render` and `sync` print nothing on any error: their output is the tmux status line. Errors belong in
   `doctor` and the daemon log.
 - The daemon logs one wide event per unit of work, not scattered lines.
-- No message text on disk outside `state.json`; files 0600, directories 0700; no network access.
+- No message text on disk outside `state.json`; files 0600, directories 0700; no network access except the opt-in judge, which calls `claude` and never runs in the daemon.
 - Tests: testify; e2e tests build the binary and run it with a clean environment, see `cleanEnv`.
 - Every Go and shell file starts with `SPDX-License-Identifier: GPL-3.0-or-later`.
 - Commits: `<area>: <what changed>`, signed off (`git commit -s`). User-visible changes go in

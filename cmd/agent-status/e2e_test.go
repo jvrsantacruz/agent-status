@@ -515,3 +515,61 @@ func TestSyncStartedBeforeAnySession(t *testing.T) {
 		return tmux("display-message", "-p", "-t", pane, "#{@agent_mark}") == "#{E:@agent_mark_working}"
 	}, 3*time.Second, 50*time.Millisecond)
 }
+
+// A Claude turn end to end: hooks and the agent emit through the binary to a
+// running daemon; the judge reads the transcript through a fake model.
+func TestTurnOutcome(t *testing.T) {
+	transcript := `{"type":"user","message":{"content":"fix the build"}}` + "\n" +
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"Fixed."}]}}` + "\n"
+	cases := []struct {
+		name, model string
+		agentDone   bool
+		want        state.SessionState
+		message     string
+	}{
+		{"the judge finds it done", "echo done", false, state.Done, "judged"},
+		{"the judge finds a question", "echo question", false, state.Question, "judged"},
+		{"the judge finds an error", "echo error", false, state.Error, "judged"},
+		{"the judge answers idle", "echo idle", false, state.Idle, ""},
+		{"the judge fails", "exit 1", false, state.Idle, ""},
+		{"what the agent declared wins", "echo question", true, state.Done, "all tests pass"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "t.jsonl")
+			require.NoError(t, os.WriteFile(path, []byte(transcript), 0o600))
+			env := cleanEnv(dir, "CLAUDE_CODE_SESSION_ID=s", "CLAUDE_PID="+strconv.Itoa(os.Getpid()),
+				"TMUX_PANE=%1", "AGENT_STATUS_JUDGE_COMMAND="+c.model)
+			daemon := command(dir, env, "daemon")
+			require.NoError(t, daemon.Start())
+			t.Cleanup(func() { _ = daemon.Process.Kill() })
+			waitReader(filepath.Join(dir, "in.fifo"))
+
+			hook := func(name string, args ...string) {
+				cmd := command(dir, env, append([]string{"emit", "--claude-hook"}, args...)...)
+				cmd.Stdin = strings.NewReader(`{"session_id":"s","hook_event_name":"` + name +
+					`","transcript_path":"` + path + `"}`)
+				out, err := cmd.CombinedOutput()
+				require.NoError(t, err, string(out))
+			}
+			current := func() state.Session {
+				sf, _ := export.Read(filepath.Join(dir, "state.json"))
+				return sf.Sessions["s"]
+			}
+			hook("UserPromptSubmit", "working")
+			if c.agentDone {
+				require.NoError(t, command(dir, env, "emit", "done", "all tests pass").Run())
+				hook("PostToolUse", "working")
+			}
+			require.Eventually(t, func() bool { return current().State == state.Working }, 3*time.Second, 20*time.Millisecond)
+			hook("Stop", "--judge", "idle")
+
+			if c.want == state.Idle {
+				time.Sleep(time.Second)
+			}
+			assert.Eventually(t, func() bool { return current().State == c.want }, 5*time.Second, 50*time.Millisecond)
+			assert.Equal(t, c.message, current().Message)
+		})
+	}
+}

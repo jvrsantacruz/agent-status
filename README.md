@@ -1,10 +1,11 @@
 # agent-status
 
-Shows in your tmux window list which AI coding agent is working, waiting for you, or failed.
+Shows in your tmux window list which AI coding agent is working, waiting for you, failed, or done.
 
 ```
- 1 api ▶  2 docs ?  3 infra ✗  4 notes
-       |        |         |
+ 1 api ▶  2 docs ?  3 infra ✗  4 notes ✓
+       |        |         |          |
+       |        |         |          +-- the agent finished its task
        |        |         +-- the agent stopped on an error
        |        +------------ the agent asks you something
        +--------------------- the agent is working
@@ -143,7 +144,7 @@ takes the prompt, a tool's input or an error's text, which can hold private text
 |---|---|---|---|
 | `session_id` | `--session` | `$AGENT_STATUS_SESSION`, `$CLAUDE_CODE_SESSION_ID` | One per agent run. Required |
 | `harness` | `--harness` | `$AGENT_STATUS_HARNESS`; `claude` inside Claude Code | Name of the agent |
-| `event` | `<state>` | | `working`, `question`, `idle`, `error`, or `end` to remove the session |
+| `event` | `<state>` | | `working`, `question`, `idle`, `error`, `done`, or `end` to remove the session |
 | `pid` | `--pid` | `$AGENT_STATUS_PID`, `$CLAUDE_PID`, then the parent process | Agent process; the session dies with it |
 | `tmux_pane` | `--pane` | `$TMUX_PANE` | Pane of the agent, such as `%3` |
 | `ts` | | now | Milliseconds since the epoch |
@@ -151,6 +152,31 @@ takes the prompt, a tool's input or an error's text, which can hold private text
 
 `emit` exits 1 on a usage error and never exits 2, because a Claude Code hook that exits 2 blocks
 the agent.
+
+### Done
+
+An agent states the outcome of its own work with `agent-status emit done "<summary>"`, or
+`emit error "<why>"` when it cannot go on. Without `--claude-hook` the event is declared: it holds
+until the turn ends, past the hooks that fire after it, and the window shows it until the next
+prompt. A harness error at the end of the turn wins over it. To have Claude do it, tell it so in
+`CLAUDE.md`:
+
+```
+When you finish the task you were given, run `agent-status emit done "<one line summary>"`.
+When you cannot go on, run `agent-status emit error "<why>"`.
+```
+
+### Judge
+
+`--judge` on the `Stop` hook has a small model read how the turn ended when the agent declared
+nothing: `agent-status emit --claude-hook --judge idle`. The hook starts `agent-status judge`
+detached and returns at once; the judge reads the last prompt and what followed from the session's
+transcript (the agent's text, the tools it called and which failed; no tool input or output) and
+runs `claude -p --model haiku` with hooks off. Its answer, `done`, `question` or `error`, is shown
+with the message `judged`; `idle`, a failure or a new prompt meanwhile leave the session as it
+is. It sends the end of the turn to Anthropic, as the session itself does, and costs one small
+model call per turn. `AGENT_STATUS_JUDGE_COMMAND` replaces the model call with a shell command that
+reads the prompt on stdin and prints one word.
 
 ## Agents
 
@@ -171,7 +197,7 @@ Claude Code hooks in the example, and what each shows:
 | `PostToolUse` | working, after an approved tool | tool name |
 | `PostToolUseFailure` | working, after a tool fails; Claude goes on | tool name |
 | `Notification` | question, about 6 s after Claude starts waiting | Claude's text |
-| `Stop` | idle | |
+| `Stop` | idle, or what the agent declared; with `--judge`, what the model reads | |
 | `StopFailure` | error, when an API error ends the turn | `error: <type>`, such as `error: rate_limit` |
 | `SessionEnd` | session removed | |
 
@@ -194,6 +220,7 @@ tmux options, set before TPM runs:
 | `@agent_mark_working` | `#[fg=colour6]▶ #[default]` |
 | `@agent_mark_question` | `#[fg=colour3,bold]? #[default]` |
 | `@agent_mark_error` | `#[fg=colour1]✗ #[default]` |
+| `@agent_mark_done` | `#[fg=colour2]✓ #[default]` |
 | `@agent_mark_dead` | `#[fg=colour8,dim]x #[default]` |
 | `@agent-status-auto-format` | `on`: the plugin puts the marker at the start of `window-status-format` and `window-status-current-format`, after their leading spaces. `off`: add `#{E:@agent_mark}` yourself |
 | `@agent-status-resurrect` | `off`. `on`: with [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) installed by TPM, a pane running claude or pi is saved as `claude --resume <id>` or `pi --session <id>`, so a restore resumes the same session. The plugin links `agent-status-resurrect.sh` into resurrect's strategy directory and sets `@resurrect-save-command-strategy`. It adds `claude` and `pi` to `@resurrect-processes` unless that is `false` or `:all:` |
@@ -229,7 +256,7 @@ Everything stays on your machine, readable by you alone (directories 0700, files
 to the tmux plugin. Check `schema_version`: a new field keeps it, a removed or changed field
 raises it. The file is replaced whole, never written in place, so a reader never sees half of it.
 
-No telemetry, no update check, no network access. To wipe everything: stop the daemon and
+No telemetry, no update check. Nothing reaches the network but the opt-in judge's model call. To wipe everything: stop the daemon and
 `rm -r ~/.local/state/agent-status`. Homebrew itself collects analytics unless
 `HOMEBREW_NO_ANALYTICS=1` is set.
 

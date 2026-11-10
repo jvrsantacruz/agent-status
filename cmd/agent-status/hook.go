@@ -20,6 +20,8 @@ type claudeHook struct {
 	Message   string `json:"message"`
 	ToolName  string `json:"tool_name"`
 	Error     string `json:"error"`
+	// Transcript is the session's JSONL log, read by judge.
+	Transcript string `json:"transcript_path"`
 }
 
 func readClaudeHook(r io.Reader) (claudeHook, error) {
