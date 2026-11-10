@@ -77,6 +77,11 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "agent-status emit: no session id: pass --session or set AGENT_STATUS_SESSION")
 		return 1
 	}
+	if h.Event == "Notification" && h.NotificationType == "idle_prompt" && showsOutcome(*session) {
+		// The idle reminder after a turn says nothing new about a turn that
+		// already ended done or in error.
+		return 0
+	}
 	e := event.Event{
 		SessionID:   *session,
 		Harness:     *harness,

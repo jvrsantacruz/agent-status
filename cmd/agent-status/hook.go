@@ -18,8 +18,10 @@ type claudeHook struct {
 	SessionID string `json:"session_id"`
 	Event     string `json:"hook_event_name"`
 	Message   string `json:"message"`
-	ToolName  string `json:"tool_name"`
-	Error     string `json:"error"`
+	// NotificationType tells a permission prompt from the idle reminder.
+	NotificationType string `json:"notification_type"`
+	ToolName         string `json:"tool_name"`
+	Error            string `json:"error"`
 	// Transcript is the session's JSONL log, read by judge.
 	Transcript string `json:"transcript_path"`
 }

@@ -570,6 +570,15 @@ func TestTurnOutcome(t *testing.T) {
 			}
 			assert.Eventually(t, func() bool { return current().State == c.want }, 5*time.Second, 50*time.Millisecond)
 			assert.Equal(t, c.message, current().Message)
+
+			// Claude's idle reminder, a minute after the turn: it keeps an outcome.
+			cmd := command(dir, env, "emit", "--claude-hook", "question")
+			cmd.Stdin = strings.NewReader(`{"session_id":"s","hook_event_name":"Notification","notification_type":"idle_prompt","message":"Claude is waiting for your input"}`)
+			require.NoError(t, cmd.Run())
+			time.Sleep(300 * time.Millisecond)
+			if c.want == state.Done || c.want == state.Error {
+				assert.Equal(t, c.want, current().State, "the idle reminder kept the outcome")
+			}
 		})
 	}
 }

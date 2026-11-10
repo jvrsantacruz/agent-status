@@ -8,6 +8,8 @@
 - `emit --claude-hook --judge` on the `Stop` hook: a small model (`claude -p --model haiku`, hooks
   off) reads how the turn ended and sets `done`, `question` or `error` when the agent declared
   nothing. It runs detached and never delays the agent. Opt-in.
+- Claude's idle reminder, a minute after a turn, no longer turns a shown `done` or `error` into
+  `question`.
 - `state.json`: the `done` state, a `declared` field while a turn has one, and the reason
   `declared:<state>`. `schema_version` stays 1.
 - tmux: markers show again after tmux restarts. tmux loads the plugin before any session exists,
