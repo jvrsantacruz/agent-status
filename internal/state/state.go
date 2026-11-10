@@ -81,6 +81,9 @@ func (m *Machine) Apply(e event.Event) Outcome {
 	s.Harness = e.Harness
 	next := SessionState(e.Event)
 	message := e.Message
+	if e.Prompt {
+		s.Declared = nil
+	}
 	switch next {
 	case Working, Question, Idle, Error, Done:
 		s.State = next

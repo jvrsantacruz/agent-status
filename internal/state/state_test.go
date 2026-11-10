@@ -235,6 +235,8 @@ func TestDeclaredOutcomeShowsWhenTheTurnEnds(t *testing.T) {
 		{"harness error wins over a declared done", []event.Event{declared("s", "done", ""), e("s", "error")}, Error, ""},
 		{"the next prompt clears done", []event.Event{declared("s", "done", ""), e("s", "idle"), e("s", "working")}, Working, ""},
 		{"used once", []event.Event{declared("s", "done", ""), e("s", "idle"), e("s", "working"), e("s", "idle")}, Idle, ""},
+		{"an interrupted turn: the next prompt drops what it declared", []event.Event{declared("s", "done", "x"),
+			{SessionID: "s", Event: "working", Prompt: true}, e("s", "idle")}, Idle, ""},
 		{"undeclared done, as a judge sends it", []event.Event{e("s", "idle"), e("s", "done")}, Done, ""},
 	}
 	for _, tc := range cases {

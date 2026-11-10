@@ -145,16 +145,6 @@ func stillEndedBy(session string, since int64) bool {
 	}
 }
 
-// showsOutcome tells whether the session's window shows how its turn ended.
-func showsOutcome(session string) bool {
-	sf, err := export.Read(statePath())
-	if err != nil {
-		return false
-	}
-	s := sf.Sessions[session].State
-	return s == state.Done || s == state.Error
-}
-
 func withoutEnv(env []string, keys ...string) []string {
 	out := env[:0:0]
 	for _, kv := range env {

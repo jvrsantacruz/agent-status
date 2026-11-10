@@ -519,66 +519,98 @@ func TestSyncStartedBeforeAnySession(t *testing.T) {
 // A Claude turn end to end: hooks and the agent emit through the binary to a
 // running daemon; the judge reads the transcript through a fake model.
 func TestTurnOutcome(t *testing.T) {
-	transcript := `{"type":"user","message":{"content":"fix the build"}}` + "\n" +
-		`{"type":"assistant","message":{"content":[{"type":"text","text":"Fixed."}]}}` + "\n"
 	cases := []struct {
 		name, model string
-		agentDone   bool
+		turn        func(r turnRig)
 		want        state.SessionState
 		message     string
 	}{
-		{"the judge finds it done", "echo done", false, state.Done, "judged"},
-		{"the judge finds a question", "echo question", false, state.Question, "judged"},
-		{"the judge finds an error", "echo error", false, state.Error, "judged"},
-		{"the judge answers idle", "echo idle", false, state.Idle, ""},
-		{"the judge fails", "exit 1", false, state.Idle, ""},
-		{"what the agent declared wins", "echo question", true, state.Done, "all tests pass"},
+		{"the judge finds it done", "echo done", nil, state.Done, "judged"},
+		{"the judge finds a question", "echo question", nil, state.Question, "judged"},
+		{"the judge finds an error", "echo error", nil, state.Error, "judged"},
+		{"the judge answers idle", "echo idle", nil, state.Idle, ""},
+		{"the judge fails", "exit 1", nil, state.Idle, ""},
+		{"what the agent declared wins", "echo question", func(r turnRig) {
+			r.emit("done", "all tests pass")
+			r.hook("PostToolUse", "working")
+		}, state.Done, "all tests pass"},
+		{"a harness error wins over what was declared", "echo done", func(r turnRig) {
+			r.emit("done", "all tests pass")
+			r.hook("StopFailure", "error")
+		}, state.Error, ""},
+		{"an interrupted turn's declaration does not reach the next turn", "echo idle", func(r turnRig) {
+			r.emit("done", "all tests pass")
+			r.hook("UserPromptSubmit", "working")
+		}, state.Idle, ""},
+		{"any harness marks its prompt with --prompt", "echo idle", func(r turnRig) {
+			r.emit("done", "all tests pass")
+			r.emit("--prompt", "working")
+		}, state.Idle, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			dir := t.TempDir()
-			path := filepath.Join(dir, "t.jsonl")
-			require.NoError(t, os.WriteFile(path, []byte(transcript), 0o600))
-			env := cleanEnv(dir, "CLAUDE_CODE_SESSION_ID=s", "CLAUDE_PID="+strconv.Itoa(os.Getpid()),
-				"TMUX_PANE=%1", "AGENT_STATUS_JUDGE_COMMAND="+c.model)
-			daemon := command(dir, env, "daemon")
-			require.NoError(t, daemon.Start())
-			t.Cleanup(func() { _ = daemon.Process.Kill() })
-			waitReader(filepath.Join(dir, "in.fifo"))
-
-			hook := func(name string, args ...string) {
-				cmd := command(dir, env, append([]string{"emit", "--claude-hook"}, args...)...)
-				cmd.Stdin = strings.NewReader(`{"session_id":"s","hook_event_name":"` + name +
-					`","transcript_path":"` + path + `"}`)
-				out, err := cmd.CombinedOutput()
-				require.NoError(t, err, string(out))
+			r := newTurnRig(t, c.model)
+			r.hook("UserPromptSubmit", "working")
+			if c.turn != nil {
+				c.turn(r)
 			}
-			current := func() state.Session {
-				sf, _ := export.Read(filepath.Join(dir, "state.json"))
-				return sf.Sessions["s"]
+			if c.want != state.Error || c.turn == nil {
+				require.Eventually(t, func() bool { return r.current().State == state.Working }, 3*time.Second, 20*time.Millisecond)
+				r.hook("Stop", "--judge", "idle")
 			}
-			hook("UserPromptSubmit", "working")
-			if c.agentDone {
-				require.NoError(t, command(dir, env, "emit", "done", "all tests pass").Run())
-				hook("PostToolUse", "working")
-			}
-			require.Eventually(t, func() bool { return current().State == state.Working }, 3*time.Second, 20*time.Millisecond)
-			hook("Stop", "--judge", "idle")
-
 			if c.want == state.Idle {
 				time.Sleep(time.Second)
 			}
-			assert.Eventually(t, func() bool { return current().State == c.want }, 5*time.Second, 50*time.Millisecond)
-			assert.Equal(t, c.message, current().Message)
+			assert.Eventually(t, func() bool { return r.current().State == c.want }, 5*time.Second, 50*time.Millisecond)
+			assert.Equal(t, c.message, r.current().Message)
 
-			// Claude's idle reminder, a minute after the turn: it keeps an outcome.
-			cmd := command(dir, env, "emit", "--claude-hook", "question")
-			cmd.Stdin = strings.NewReader(`{"session_id":"s","hook_event_name":"Notification","notification_type":"idle_prompt","message":"Claude is waiting for your input"}`)
-			require.NoError(t, cmd.Run())
+			// Claude's idle reminder, a minute after the turn, changes nothing.
+			r.hook("Notification", "question")
 			time.Sleep(300 * time.Millisecond)
-			if c.want == state.Done || c.want == state.Error {
-				assert.Equal(t, c.want, current().State, "the idle reminder kept the outcome")
-			}
+			assert.Equal(t, c.want, r.current().State, "the idle reminder kept the state")
 		})
 	}
+}
+
+// turnRig is one Claude session against a running daemon, its transcript
+// ending with the agent's reply.
+type turnRig struct {
+	t         *testing.T
+	dir, path string
+	env       []string
+}
+
+func newTurnRig(t *testing.T, model string) turnRig {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "t.jsonl")
+	require.NoError(t, os.WriteFile(path, []byte(`{"type":"user","message":{"content":"fix the build"}}`+"\n"+
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"Fixed."}]}}`+"\n"), 0o600))
+	env := cleanEnv(dir, "CLAUDE_CODE_SESSION_ID=s", "CLAUDE_PID="+strconv.Itoa(os.Getpid()),
+		"TMUX_PANE=%1", "AGENT_STATUS_JUDGE_COMMAND="+model)
+	daemon := command(dir, env, "daemon")
+	require.NoError(t, daemon.Start())
+	t.Cleanup(func() { _ = daemon.Process.Kill() })
+	waitReader(filepath.Join(dir, "in.fifo"))
+	return turnRig{t: t, dir: dir, path: path, env: env}
+}
+
+// hook runs emit as the Claude Code hook name does; a Notification is the
+// idle reminder.
+func (r turnRig) hook(name string, args ...string) {
+	cmd := command(r.dir, r.env, append([]string{"emit", "--claude-hook"}, args...)...)
+	cmd.Stdin = strings.NewReader(`{"session_id":"s","hook_event_name":"` + name +
+		`","notification_type":"idle_prompt","transcript_path":"` + r.path + `"}`)
+	out, err := cmd.CombinedOutput()
+	require.NoError(r.t, err, string(out))
+}
+
+// emit runs emit as the agent does from its own shell.
+func (r turnRig) emit(args ...string) {
+	out, err := command(r.dir, r.env, append([]string{"emit"}, args...)...).CombinedOutput()
+	require.NoError(r.t, err, string(out))
+}
+
+func (r turnRig) current() state.Session {
+	sf, _ := export.Read(filepath.Join(r.dir, "state.json"))
+	return sf.Sessions["s"]
 }

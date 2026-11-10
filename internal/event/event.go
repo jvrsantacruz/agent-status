@@ -23,6 +23,9 @@ type Event struct {
 	// Declared marks a done or error the agent states about its own work.
 	// It holds until the turn ends, past the hooks that fire after it.
 	Declared bool `json:"declared,omitempty"`
+	// Prompt marks the event that starts a turn: nothing declared in an
+	// earlier turn holds past it, even when that turn never ended.
+	Prompt bool `json:"prompt,omitempty"`
 }
 
 func (e *Event) Time() time.Time {

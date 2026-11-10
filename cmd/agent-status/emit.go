@@ -36,6 +36,8 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 	pane := fs.String("pane", os.Getenv("TMUX_PANE"), "tmux pane id of the agent; from $TMUX_PANE")
 	hook := fs.Bool("claude-hook", false,
 		"read the JSON Claude Code gives a hook on stdin: session id, and a message from the notification text or the tool name")
+	prompt := fs.Bool("prompt", false,
+		"the event starts a turn on a new prompt: nothing an earlier turn declared holds past it; set for Claude's UserPromptSubmit hook")
 	judge := fs.Bool("judge", false,
 		"with --claude-hook on Stop: a small model reads the turn and sets done, question or error; see agent-status judge")
 	fs.Usage = func() {
@@ -77,9 +79,9 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "agent-status emit: no session id: pass --session or set AGENT_STATUS_SESSION")
 		return 1
 	}
-	if h.Event == "Notification" && h.NotificationType == "idle_prompt" && showsOutcome(*session) {
-		// The idle reminder after a turn says nothing new about a turn that
-		// already ended done or in error.
+	if h.Event == "Notification" && h.NotificationType == "idle_prompt" {
+		// The reminder that Claude still waits says nothing new about how the
+		// turn ended.
 		return 0
 	}
 	e := event.Event{
@@ -92,6 +94,8 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 		Message:     msg,
 		// An agent states its own outcome; a hook reports what the harness saw.
 		Declared: !*hook && (fs.Arg(0) == "done" || fs.Arg(0) == "error"),
+		// An interrupted turn sends no Stop; the next prompt is what ends it.
+		Prompt: *prompt || h.Event == "UserPromptSubmit",
 	}
 	if err := send(e); err != nil {
 		fmt.Fprintf(stderr, "agent-status emit: %v\n", err)
