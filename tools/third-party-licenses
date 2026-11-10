@@ -10,7 +10,11 @@ cd "$(dirname "$0")/.."
 # The Go runtime and standard library, linked into every Go binary, carry the
 # same licence text as golang.org/x/sys below (checked identical).
 printf 'Go standard library: the licence of golang.org/x/sys below\n\n'
-GOFLAGS=-mod=mod go list -deps -f '{{with .Module}}{{if not .Main}}{{.Path}} {{.Version}} {{.Dir}}{{end}}{{end}}' ./cmd/agent-status |
+# Every system a release builds for: some modules link on macOS only.
+for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+  GOOS=${target%/*} GOARCH=${target#*/} GOFLAGS=-mod=mod \
+    go list -deps -f '{{with .Module}}{{if not .Main}}{{.Path}} {{.Version}} {{.Dir}}{{end}}{{end}}' ./cmd/agent-status
+done |
   sort -u |
   while read -r path version dir; do
     found=0
