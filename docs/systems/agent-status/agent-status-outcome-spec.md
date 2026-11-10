@@ -4,7 +4,7 @@
 
 How a turn's outcome reaches the window list. A session runs the **emit command** itself to
 declare done or error; the daemon keeps a declared outcome through the rest of the turn and
-shows it when the turn ends. Where the judge is on, the harness's stop hook runs emit with `--judge`,
+shows it when the turn ends. Where the judge is on, Claude Code's stop hook runs emit with `--judge`,
 which starts the **judge command** detached and returns. The judge reads the turn from the
 session's transcript, asks a small model how it ended, and emits done, question or error, only
 while the session is still idle from that stop.
@@ -22,8 +22,8 @@ flowchart LR
     state -- still idle? --> judge
     judge -- verdict --> daemon
   end
-  transcript[(session transcript)] -- the turn --> judge
-  judge -- the turn --> model[claude -p, small model]
+  transcript[(Claude Code transcript)] -- the turn --> judge
+  judge -- the turn --> model[claude]
   model -- one word --> judge
 ```
 
@@ -57,16 +57,14 @@ Requirements: `turn-outcome`, `local-only`.
 | held outcome | idle, the turn ends | the outcome |
 | held outcome | harness error | error, outcome dropped |
 | idle from a stop | judge verdict | done, question or error |
+| held outcome | a prompt the harness marks | working, outcome dropped |
 | any | next prompt | working |
 
 ## failure modes
 
 - **No verdict** (the model fails, times out, or answers anything but done, question or error): the session stays idle.
-- **Idle reminder** (Claude's notification a minute after a turn): emit drops it while the window shows done or error, so the outcome holds until the next prompt.
-- **Verdict too late**: a new prompt or a declared outcome came first; the judge emits nothing.
+- **Verdict not shown**: the turn already shows a harness error or a declared outcome, a prompt arrived after the stop, or the daemon had not recorded the stop when the judge checked; the judge emits nothing and the window keeps what it shows.
 
 ## validation
 
 The fixture set in [agent-status-spec](agent-status-spec.md) holds it.
-
-- `turn-outcome` (test, [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go)): a turn where the session emits done, then a tool hook and the stop, shows done with its summary over the model's verdict; with a fake model, each of done, question and error is shown as judged, idle or a failing model leave the session idle; Claude's idle reminder keeps a done or error.

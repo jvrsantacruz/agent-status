@@ -4,11 +4,12 @@
 
 - A `done` state, marked `✓`: an agent runs `agent-status emit done "<summary>"` when it finishes
   its task. A `done` or `error` an agent emits itself is declared: it holds until the turn ends, so
-  the hooks after it do not hide it.
+  the hooks after it do not hide it. `emit --prompt`, or Claude's prompt hook, marks the event that starts a turn, so a turn interrupted
+  after a declaration does not carry it into the next.
 - `emit --claude-hook --judge` on the `Stop` hook: a small model (`claude -p --model haiku`, hooks
   off) reads how the turn ended and sets `done`, `question` or `error` when the agent declared
   nothing. It runs detached and never delays the agent. Opt-in.
-- Claude's idle reminder, a minute after a turn, no longer turns a shown `done` or `error` into
+- Claude's idle reminder, a minute after a turn, is ignored: it no longer turns a finished turn into
   `question`.
 - `state.json`: the `done` state, a `declared` field while a turn has one, and the reason
   `declared:<state>`. `schema_version` stays 1.

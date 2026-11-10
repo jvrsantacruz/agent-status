@@ -3,9 +3,9 @@
 ## domain
 
 agent-status shows in the tmux window list what each AI coding agent session is doing, so
-with several agents the one that needs me is visible without visiting each window. It also knows which pane each session runs in, so, where I turn resurrect integration on, a
+with several agents the one that needs me is visible without visiting each window. Where I turn resurrect integration on, a
 [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) restore reopens the same
-Claude Code or pi conversation. A session can say it is done, having finished its work, or that it failed; where I turn the judge
+Claude Code or pi conversation in its pane. A session can declare its turn done or failed; where I turn the judge
 on, a small model reads how a turn ended. It is not a notifier; only the judge's model call
 leaves the machine.
 
@@ -20,15 +20,16 @@ flowchart LR
   me([me]) -- sees which window needs me --> sys[agent-status]
   agent([harness]) -- reports each state change --> sys
   resurrect([tmux-resurrect]) -- saves each pane with its session --> sys
-  reader([user's program]) -- reads every session --> sys
+  reader([user's programs]) -- reads every session --> sys
+  sys -- the turn from the Claude Code transcript --> claude[claude, small model]
 ```
 
-_The use cases: each arrow is an actor and the goal it has with agent-status._
+_The use cases: each arrow into agent-status is an actor and its goal; the arrow out is the model the judge asks._
 
 ## requirements
 
 - `window-marks`: The tmux window list MUST mark each window whose active pane holds a session that is working, asking a question, in error or done.
-- `turn-outcome`: When a turn ends, its window MUST show until the next prompt the session's declared done or error, else, where the judge is on, what a small model reads in a Claude Code turn.
+- `turn-outcome`: When a turn ends, its window MUST show until the next prompt a harness error, else the session's declared done or error, else, where the judge is on for Claude Code, a small model's reading.
 - `exit-clears`: If a session's process exits without an end event, then the window whose active pane held it MUST show it dead until the dead keep time passes or a live session takes that pane.
 - `restore-resumes`: Where resurrect integration is on, when tmux-resurrect restores a pane that held a live claude or pi session, the pane MUST reopen that same session.
 - `readable-record`: The system MUST let any program its user runs read the harness, state and pane of every current session.

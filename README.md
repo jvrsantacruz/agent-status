@@ -132,7 +132,7 @@ write is atomic only up to `PIPE_BUF`, which is 512 on macOS, and a longer line 
 with another agent's line.
 
 ```sh
-agent-status emit [--session ID] [--harness NAME] [--pid PID] [--pane PANE] [--claude-hook] <state> [message]
+agent-status emit [--session ID] [--harness NAME] [--pid PID] [--pane PANE] [--prompt] [--claude-hook [--judge]] <state> [message]
 ```
 
 Inside a Claude Code hook, `--claude-hook` reads the JSON Claude gives the hook on stdin: the
@@ -149,6 +149,8 @@ takes the prompt, a tool's input or an error's text, which can hold private text
 | `tmux_pane` | `--pane` | `$TMUX_PANE` | Pane of the agent, such as `%3` |
 | `ts` | | now | Milliseconds since the epoch |
 | `message` | `[message]` | | Free text, shown in `state.json`; cut, ending in `...`, so the line fits 512 bytes |
+| `declared` | | `true` for `done` or `error` without `--claude-hook` | The agent's own outcome, shown when the turn ends |
+| `prompt` | `--prompt` | `true` for Claude's `UserPromptSubmit` hook | Starts a turn; drops an outcome an interrupted turn declared |
 
 `emit` exits 1 on a usage error and never exits 2, because a Claude Code hook that exits 2 blocks
 the agent.
@@ -183,7 +185,7 @@ reads the prompt on stdin and prints one word.
 | Agent | How |
 |---|---|
 | Claude Code | [examples/claude-hooks.json](examples/claude-hooks.json): ten hooks, below |
-| pi | an extension that runs `agent-status emit --harness pi --session <id> <state>` on its events |
+| pi | an extension that runs `agent-status emit --harness pi --session <id> [--prompt] <state>` on its events, with `--prompt` on the event a new prompt starts |
 | Any command | [examples/agent-status-wrap](examples/agent-status-wrap): `agent-status-wrap aider ...` shows working while it runs and error if it fails |
 
 Claude Code hooks in the example, and what each shows:
@@ -196,7 +198,7 @@ Claude Code hooks in the example, and what each shows:
 | `PermissionRequest` | question, as the prompt appears | `permission: <tool>` |
 | `PostToolUse` | working, after an approved tool | tool name |
 | `PostToolUseFailure` | working, after a tool fails; Claude goes on | tool name |
-| `Notification` | question, about 6 s after Claude starts waiting | Claude's text |
+| `Notification` | question, about 6 s after Claude starts waiting; the idle reminder a minute after a turn is ignored | Claude's text |
 | `Stop` | idle, or what the agent declared; with `--judge`, what the model reads | |
 | `StopFailure` | error, when an API error ends the turn | `error: <type>`, such as `error: rate_limit` |
 | `SessionEnd` | session removed | |

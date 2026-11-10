@@ -38,5 +38,3 @@ Requirements: `restore-resumes`, `resurrect-strategy`.
 ## validation
 
 The fixture set in [agent-status-spec](agent-status-spec.md) holds it.
-
-- `restore-resumes` (test, [resurrect-e2e](https://github.com/jvrsantacruz/agent-status/blob/main/tools/resurrect-e2e)): after a real save and restore, the pane that held a live session runs its resume command and the exited one its plain command.

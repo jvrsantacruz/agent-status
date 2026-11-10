@@ -7,8 +7,7 @@ The **agent-status binary** holds every command. A harness reports each state ch
 session's state and event history, marks a session dead when its process exits, and writes
 **state.json**. In each tmux server, the **sync command** loads each pane's marker from
 state.json once a second. The **tmux plugin** starts sync. The **render command** prints a
-pane's marker for themes; the **doctor command** sends a test session through the FIFO and reads
-it back. Neither is drawn. How a turn's outcome is set is in
+pane's marker for themes; the **doctor command** sends a test session through the FIFO. Neither is drawn. How a turn's outcome is set is in
 [agent-status-outcome-spec](agent-status-outcome-spec.md); how a restore resumes a session is in
 [agent-status-resurrect-spec](agent-status-resurrect-spec.md).
 
@@ -45,11 +44,14 @@ unless `@agent-status-auto-format` is off, and starts sync.
 One event per state change, from Claude Code hooks, a pi extension or any program. The harness
 needs emit to exit 0 within its write timeout, except on a usage error such as no session id
 or an oversized line. agent-status needs the session id, process id, tmux pane, and a harness
-name equal to the program, so a restore can resume it.
+name equal to the program, so a restore can resume it. Emit drops Claude's idle reminder, a
+Notification of type idle_prompt, so the window keeps how the turn ended. A harness marks the
+prompt that starts a turn, `--prompt` or Claude's UserPromptSubmit hook, so nothing an earlier
+turn declared holds past it.
 [Event format](https://github.com/jvrsantacruz/agent-status#event-format).
-Requirements: `never-blocks`, `private-text`, `window-marks`.
+Requirements: `never-blocks`, `private-text`, `window-marks`, `turn-outcome`, `restore-resumes`.
 
-**daemon -> the user's programs** (file, state.json, auth file permissions)
+**daemon -> user's programs** (file, state.json, auth file permissions)
 Replaced whole on each change, so no reader sees half a file. Removing or changing a field
 raises the version of its
 [schema](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json).
@@ -94,7 +96,7 @@ _Session states. A harness event moves to the state it names, except the idle th
 
 ## validation
 
-fixtures: [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go) and [resurrect-e2e](https://github.com/jvrsantacruz/agent-status/blob/main/tools/resurrect-e2e): the real binary in a clean environment, fed emit calls, saved Claude Code hook inputs, saved transcripts or written state.json files, for each state, a dead session, a restart, no daemon, sync on a scratch tmux server started before any session, one Claude turn with a fake model command for each verdict, plus a real save and restore on a scratch tmux server with one live and one exited session; expected outputs from hand-checked state.json, render values, pane options and the restored pane commands; compared exactly.
+fixtures: [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go) and [resurrect-e2e](https://github.com/jvrsantacruz/agent-status/blob/main/tools/resurrect-e2e): the real binary in a clean environment, fed emit calls, saved Claude Code hook inputs, saved transcripts or written state.json files, for each state, a dead session, a restart, no daemon, sync on a scratch tmux server started before any session, one Claude turn with a fake model command for each verdict, a declared done followed by a tool hook and the stop, by a harness error, or by an interrupted turn and a new prompt, Claude's idle reminder after each outcome, plus a real save and restore on a scratch tmux server with one live and one exited session; expected outputs from hand-checked state.json, render values, pane options and the restored pane commands; compared exactly.
 
 - `never-blocks` (test, [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go)): with no daemon, or a full FIFO never read, emit exits 0 within its write timeout.
 - `private-text` (test, [hook tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/hook_test.go)): the message kept from hook input is only the notification text, the tool name or the error type, such as rate_limit.
