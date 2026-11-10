@@ -24,6 +24,8 @@ import (
 
 const (
 	judgeWait = time.Minute
+	// catchUpWait bounds how long judge waits for state.json to hold its stop.
+	catchUpWait = 5 * time.Second
 	// turnBytes bounds the end of the turn the model reads.
 	turnBytes = 6000
 )
@@ -125,13 +127,22 @@ func verdict(out string) state.SessionState {
 
 // stillEndedBy tells whether the session's state is still the idle event
 // that started this judge: no prompt since, and nothing the agent declared.
+// It first waits for state.json to hold that event, which the daemon may
+// not have written yet.
 func stillEndedBy(session string, since int64) bool {
-	sf, err := export.Read(statePath())
-	if err != nil {
-		return false
+	deadline := clock().Add(catchUpWait)
+	for {
+		sf, err := export.Read(statePath())
+		if err == nil {
+			if s, ok := sf.Sessions[session]; ok && s.UpdatedAt >= since {
+				return s.State == state.Idle && s.UpdatedAt == since
+			}
+		}
+		if clock().After(deadline) {
+			return false
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	s, ok := sf.Sessions[session]
-	return ok && s.State == state.Idle && s.UpdatedAt == since
 }
 
 // showsOutcome tells whether the session's window shows how its turn ended.
