@@ -9,6 +9,7 @@ import (
 
 	"github.com/jvrsantacruz/agent-status/internal/event"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func e(sid, state string) event.Event {
@@ -251,4 +252,52 @@ func TestDeclaredOutcomeShowsWhenTheTurnEnds(t *testing.T) {
 			assert.Equal(t, tc.message, s.Message)
 		})
 	}
+}
+
+// An event without a path keeps the one an earlier event sent.
+func TestApplyKeepsPaths(t *testing.T) {
+	t.Parallel()
+	sm := NewMachine()
+	sm.Apply(event.Event{SessionID: "s1", Event: "working", Pane: "%1", Cwd: "/src/api", Transcript: "/t/s1.jsonl", TmuxSocket: "/tmp/tmux-1000/default"})
+	sm.Apply(event.Event{SessionID: "s1", Event: "idle", Pane: "%1"})
+	s := sm.Snapshot()["s1"]
+	assert.Equal(t, "/src/api", s.Cwd)
+	assert.Equal(t, "/t/s1.jsonl", s.Transcript)
+	assert.Equal(t, "/tmp/tmux-1000/default", s.TmuxSocket)
+
+	sm.Apply(event.Event{SessionID: "s1", Event: "working", Pane: "%1", Cwd: "/src/docs"})
+	assert.Equal(t, "/src/docs", sm.Snapshot()["s1"].Cwd, "a new path replaces the old")
+}
+
+func TestSetPlaces(t *testing.T) {
+	t.Parallel()
+	sock := "/tmp/tmux-1000/default"
+	sm := NewMachine()
+	sm.Apply(event.Event{SessionID: "here", Event: "working", Pane: "%1", TmuxSocket: sock})
+	sm.Apply(event.Event{SessionID: "other server", Event: "working", Pane: "%1", TmuxSocket: "/tmp/other"})
+	sm.Apply(event.Event{SessionID: "unlisted", Event: "working", Pane: "%9", TmuxSocket: sock})
+
+	places := map[string]Place{"%1": {Session: "work", WindowIndex: 0, WindowName: "api"}}
+	assert.True(t, sm.SetPlaces(sock, places))
+	assert.False(t, sm.SetPlaces(sock, places), "the same place changes nothing")
+
+	snap := sm.Snapshot()
+	here := snap["here"]
+	assert.Equal(t, "work", here.TmuxSession)
+	require.NotNil(t, here.WindowIndex, "window 0 is a place")
+	assert.Equal(t, 0, *here.WindowIndex)
+	assert.Equal(t, "api", here.WindowName)
+	assert.Empty(t, snap["other server"].TmuxSession, "a pane id names a pane on one server only")
+	assert.Empty(t, snap["unlisted"].TmuxSession)
+
+	sm.Apply(event.Event{SessionID: "here", Event: "idle", Pane: "%1"})
+	assert.Equal(t, "api", sm.Snapshot()["here"].WindowName, "an event keeps the place")
+	sm.SetPlaces(sock, map[string]Place{})
+	assert.Equal(t, "api", sm.Snapshot()["here"].WindowName, "a pane not listed keeps its place")
+
+	sm.Apply(event.Event{SessionID: "here", Event: "working", Pane: "%2"})
+	moved := sm.Snapshot()["here"]
+	assert.Empty(t, moved.TmuxSession, "another pane drops the old place")
+	assert.Nil(t, moved.WindowIndex)
+	assert.Equal(t, sock, moved.TmuxSocket)
 }

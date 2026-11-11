@@ -35,6 +35,23 @@ type Session struct {
 	// Declared is what the agent stated about its work in this turn, shown
 	// when the turn ends.
 	Declared *Declaration `json:"declared,omitempty"`
+	// Cwd, Transcript and TmuxSocket come from the events; an event without
+	// one keeps the earlier value.
+	Cwd        string `json:"cwd,omitempty"`
+	Transcript string `json:"transcript_path,omitempty"`
+	TmuxSocket string `json:"tmux_socket,omitempty"`
+	// TmuxSession, WindowIndex and WindowName are where the pane sits, as
+	// the daemon last asked its tmux server.
+	TmuxSession string `json:"tmux_session,omitempty"`
+	WindowIndex *int   `json:"window_index,omitempty"`
+	WindowName  string `json:"window_name,omitempty"`
+}
+
+// Place is where a pane sits in its tmux server.
+type Place struct {
+	Session     string
+	WindowIndex int
+	WindowName  string
 }
 
 type Declaration struct {
@@ -105,7 +122,20 @@ func (m *Machine) Apply(e event.Event) Outcome {
 		s.Reason = "event:unknown(" + e.Event + ")"
 	}
 	s.PID = e.PID
+	if e.Pane != s.Pane || (e.TmuxSocket != "" && e.TmuxSocket != s.TmuxSocket) {
+		// Another pane: where the old one sat says nothing of the new one.
+		s.TmuxSession, s.WindowIndex, s.WindowName = "", nil, ""
+	}
 	s.Pane = e.Pane
+	if e.Cwd != "" {
+		s.Cwd = e.Cwd
+	}
+	if e.Transcript != "" {
+		s.Transcript = e.Transcript
+	}
+	if e.TmuxSocket != "" {
+		s.TmuxSocket = e.TmuxSocket
+	}
 	s.UpdatedAt = e.TimestampMs
 	s.Message = message
 	// Clear dead_since on any new event — the session came back.
@@ -129,6 +159,28 @@ func (m *Machine) MarkDead(sessionID string, now time.Time) {
 	s.Reason = "liveness:pid_gone"
 	s.PID = 0
 	s.UpdatedAt = ms
+}
+
+// SetPlaces sets where each session on socket sits, from places keyed by
+// pane id. A session whose pane is not listed keeps what it had. It reports
+// whether any session changed. Thread-safe.
+func (m *Machine) SetPlaces(socket string, places map[string]Place) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	changed := false
+	for _, s := range m.sessions {
+		p, ok := places[s.Pane]
+		if s.TmuxSocket != socket || !ok {
+			continue
+		}
+		if s.TmuxSession == p.Session && s.WindowIndex != nil && *s.WindowIndex == p.WindowIndex && s.WindowName == p.WindowName {
+			continue
+		}
+		s.TmuxSession, s.WindowIndex, s.WindowName = p.Session, &p.WindowIndex, p.WindowName
+		changed = true
+	}
+	return changed
 }
 
 // PruneDead removes sessions that have been dead for more than ttl.

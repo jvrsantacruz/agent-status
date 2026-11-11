@@ -66,6 +66,7 @@ func validate(t *testing.T, s *jsonschema.Schema, data string) error {
 func TestWriteMatchesSchema(t *testing.T) {
 	t.Parallel()
 	dead := int64(1700000000000)
+	window := 0
 	files := map[string]StateFile{
 		"nil sessions": {},
 		"every state": {
@@ -77,6 +78,8 @@ func TestWriteMatchesSchema(t *testing.T) {
 				"e": {State: state.Error, Message: "error: rate_limit", Reason: "event:error"},
 				"u": {State: state.Idle, Reason: "event:unknown(paused)"},
 				"d": {State: state.Dead, DeadSince: &dead, Reason: "liveness:pid_gone"},
+				"p": {State: state.Working, Reason: "event:working", Pane: "%1", Cwd: "/src/api", Transcript: "/t/p.jsonl",
+					TmuxSocket: "/tmp/tmux-1000/default", TmuxSession: "work", WindowIndex: &window, WindowName: "api"},
 			},
 		},
 	}
