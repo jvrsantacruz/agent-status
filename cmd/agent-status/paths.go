@@ -36,3 +36,4 @@ func runtimeDir() string {
 func fifoPath() string  { return filepath.Join(runtimeDir(), "in.fifo") }
 func statePath() string { return filepath.Join(stateDir(), "state.json") }
 func dbPath() string    { return filepath.Join(stateDir(), "state.db") }
+func metaPath() string  { return filepath.Join(stateDir(), "meta.json") }

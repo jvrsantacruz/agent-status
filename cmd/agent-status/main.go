@@ -28,6 +28,8 @@ commands:
                                   --claude-hook inside a Claude Code hook
   render <pane>                   print the tmux marker for a pane id, such as %3
   judge [flags]                   classify how a Claude turn ended; emit --judge starts it
+  enrich                          write meta.json: names, branches, pull requests, tokens;
+                                  the daemon starts it every minute
   sync [--once]                   keep each tmux pane's @agent_mark current; the plugin starts it
   session <pane>                  print the harness and session id on a pane
   doctor                          check the installation end to end
@@ -57,6 +59,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runRender(args[1:], stdout)
 	case "judge":
 		return runJudge(args[1:], stderr)
+	case "enrich":
+		return runEnrich(stderr)
 	case "sync":
 		return runSync(args[1:], stderr)
 	case "doctor":
