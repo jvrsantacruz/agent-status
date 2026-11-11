@@ -132,11 +132,11 @@ write is atomic only up to `PIPE_BUF`, which is 512 on macOS, and a longer line 
 with another agent's line.
 
 ```sh
-agent-status emit [--session ID] [--harness NAME] [--pid PID] [--pane PANE] [--prompt] [--claude-hook [--judge]] <state> [message]
+agent-status emit [--session ID] [--harness NAME] [--pid PID] [--pane PANE] [--cwd DIR] [--transcript FILE] [--prompt] [--claude-hook [--judge]] <state> [message]
 ```
 
 Inside a Claude Code hook, `--claude-hook` reads the JSON Claude gives the hook on stdin: the
-session id, and a message from the notification text ("Claude needs your permission") or the tool
+session id, the working directory and transcript path, and a message from the notification text ("Claude needs your permission") or the tool
 name ("Bash", "permission: Bash"), or the type of an API error ("error: rate_limit"). It never
 takes the prompt, a tool's input or an error's text, which can hold private text. Bad input is reported on stderr and the event is still sent.
 
@@ -151,6 +151,15 @@ takes the prompt, a tool's input or an error's text, which can hold private text
 | `message` | `[message]` | | Free text, shown in `state.json`; cut, ending in `...`, so the line fits 512 bytes |
 | `declared` | | `true` for `done` or `error` without `--claude-hook` | The agent's own outcome, shown when the turn ends |
 | `prompt` | `--prompt` | `true` for Claude's `UserPromptSubmit` hook | Starts a turn; drops an outcome an interrupted turn declared |
+| `cwd` | `--cwd` | Claude's hook input; the directory emit runs in | Working directory of the session, absolute |
+| `transcript_path` | `--transcript` | Claude's hook input | Transcript file of the session, absolute, such as pi's session file |
+| `tmux_socket` | | the first field of `$TMUX` | Socket of the agent's tmux server |
+
+`cwd`, `transcript_path` and `tmux_socket` are optional: an event without one keeps the value an
+earlier event of the session sent. When a line is over 512 bytes, emit cuts the message first,
+then drops `transcript_path`, `cwd` and `tmux_socket`, in that order. Once a minute the daemon
+asks each session's tmux server, by its socket, where the pane sits, and `state.json` shows its
+`tmux_session`, `window_index` and `window_name`.
 
 `emit` exits 1 on a usage error and never exits 2, because a Claude Code hook that exits 2 blocks
 the agent.
@@ -250,7 +259,7 @@ Everything stays on your machine, readable by you alone (directories 0700, files
 
 | File | Content | Kept |
 |---|---|---|
-| `state.json` | Current sessions: state, pid, pane, last message | While the session lives, plus 5 minutes |
+| `state.json` | Current sessions: state, pid, pane and its tmux window, working directory, transcript path, last message | While the session lives, plus 5 minutes |
 | `state.db` | Events: session, agent, state, pid, pane, times. No message text | 7 days |
 
 `state.json` is the read side for other programs, such as a status bar or a script. Its shape is

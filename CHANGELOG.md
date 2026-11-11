@@ -2,6 +2,12 @@
 
 ## 0.4.0
 
+- Events carry `cwd`, `transcript_path` and `tmux_socket`: `emit --claude-hook` reads the first two
+  from Claude's hook input, `emit --cwd` and `--transcript` set them for any agent, and the socket
+  comes from `$TMUX`. A line over 512 bytes cuts the message first, then drops these three.
+- `state.json`: each session keeps its `cwd`, `transcript_path` and `tmux_socket`, and the daemon
+  adds where its pane sits, `tmux_session`, `window_index` and `window_name`, asking each tmux
+  server once a minute. `schema_version` stays 1.
 - A `done` state, marked `✓`: an agent runs `agent-status emit done "<summary>"` when it finishes
   its task. A `done` or `error` an agent emits itself is declared: it holds until the turn ends, so
   the hooks after it do not hide it. `emit --prompt`, or Claude's prompt hook, marks the event that starts a turn, so a turn interrupted
