@@ -18,9 +18,41 @@ import (
 
 func compileSchema(t *testing.T) *jsonschema.Schema {
 	t.Helper()
-	s, err := jsonschema.NewCompiler().Compile("../../schema/state.schema.json")
+	return compile(t, "state.schema.json")
+}
+
+// compile loads a schema from schema/, with meta.schema.json registered under
+// its $id, so state.schema.json's $ref resolves without the network.
+func compile(t *testing.T, name string) *jsonschema.Schema {
+	t.Helper()
+	c := jsonschema.NewCompiler()
+	f, err := os.Open("../../schema/meta.schema.json")
+	require.NoError(t, err)
+	defer f.Close()
+	doc, err := jsonschema.UnmarshalJSON(f)
+	require.NoError(t, err)
+	require.NoError(t, c.AddResource("https://raw.githubusercontent.com/jvrsantacruz/agent-status/main/schema/meta.schema.json", doc))
+	s, err := c.Compile("../../schema/" + name)
 	require.NoError(t, err)
 	return s
+}
+
+// The contract fixtures other programs build against match the schemas.
+func TestContractFixturesMatchSchema(t *testing.T) {
+	t.Parallel()
+	files := map[string]string{
+		"state-with-meta.json":    "state.schema.json",
+		"state-without-meta.json": "state.schema.json",
+		"meta.json":               "meta.schema.json",
+	}
+	for file, schema := range files {
+		t.Run(file, func(t *testing.T) {
+			t.Parallel()
+			data, err := os.ReadFile(filepath.Join("../../testdata/contract", file))
+			require.NoError(t, err)
+			assert.NoError(t, validate(t, compile(t, schema), string(data)))
+		})
+	}
 }
 
 func validate(t *testing.T, s *jsonschema.Schema, data string) error {

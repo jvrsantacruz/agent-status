@@ -46,6 +46,13 @@
           "pattern": "^(event:[^()]+|event:unknown\\(.*\\)|declared:(done|error)|liveness:pid_gone)$",
           "description": "What set state: event:<name>, event:unknown(<name>), declared:<state> or liveness:pid_gone."
         },
+        "cwd": {"type": "string", "description": "The session's working directory, absolute."},
+        "transcript_path": {"type": "string", "description": "The session's transcript file, absolute."},
+        "tmux_socket": {"type": "string", "description": "The socket of the tmux server the pane belongs to."},
+        "tmux_session": {"type": "string", "description": "The tmux session name of the pane."},
+        "window_index": {"type": "integer", "minimum": 0, "description": "The tmux window index of the pane."},
+        "window_name": {"type": "string", "description": "The tmux window name of the pane."},
+        "meta": {"$ref": "meta.schema.json#/$defs/meta", "description": "What the enrich run read from the transcript, directory and git; absent until it runs."},
         "declared": {
           "description": "Absent unless the agent declared done or error in the current turn; it becomes the state when the turn ends.",
           "type": "object",

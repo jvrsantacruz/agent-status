@@ -1,0 +1,120 @@
+{
+ "schema_version": 1,
+ "daemon": {
+  "version": "v0.5.0",
+  "pid": 100,
+  "started_at": 1794390000000,
+  "last_event_at": 1794406000000,
+  "events_total": 40,
+  "events_rejected": 0
+ },
+ "sessions": {
+  "11111111-aaaa-4000-8000-000000000001": {
+   "harness": "claude",
+   "state": "error",
+   "pid": 4002,
+   "tmux_pane": "%14",
+   "dead_since": null,
+   "updated_at": 1794406000000,
+   "message": "error: rate_limit",
+   "reason": "event:error",
+   "cwd": "/home/u/src/api",
+   "transcript_path": "/home/u/.claude/projects/-home-u-src-api/s2.jsonl",
+   "tmux_socket": "/tmp/tmux-1000/default",
+   "tmux_session": "work",
+   "window_index": 2,
+   "window_name": "api",
+   "meta": {
+    "title": "Fix the flaky login test",
+    "name": "Fix flaky login test",
+    "name_turns": 12,
+    "repo": "/home/u/src/api",
+    "branch": "feat/LAB-7-login",
+    "ticket": "LAB-7",
+    "pr": {
+     "number": 230,
+     "state": "open"
+    },
+    "model": "claude-opus-5-5",
+    "turns": 12,
+    "last_prompt": "the test still fails on CI, check the retry",
+    "tokens": {
+     "input": 1200,
+     "output": 45000,
+     "cache_read": 3100000,
+     "cache_write": 210000
+    },
+    "cost_usd": 2.86,
+    "started_at": 1794400000000,
+    "last_active_at": 1794406000000
+   }
+  },
+  "11111111-aaaa-4000-8000-000000000002": {
+   "harness": "claude",
+   "state": "question",
+   "pid": 4002,
+   "tmux_pane": "%15",
+   "dead_since": null,
+   "updated_at": 1794406000000,
+   "message": "permission: Bash",
+   "reason": "event:question",
+   "cwd": "/home/u/src/api",
+   "transcript_path": "/home/u/.claude/projects/-home-u-src-api/s2.jsonl",
+   "tmux_socket": "/tmp/tmux-1000/default",
+   "tmux_session": "work",
+   "window_index": 2,
+   "window_name": "api",
+   "meta": {
+    "title": "Add CSV export",
+    "name": "Add CSV export endpoint",
+    "name_turns": 12,
+    "repo": "/home/u/src/api",
+    "branch": "feat/LAB-7-login",
+    "ticket": "#198",
+    "model": "claude-sonnet-5-5",
+    "turns": 12,
+    "last_prompt": "should the export include archived rows?",
+    "tokens": {
+     "input": 1200,
+     "output": 45000,
+     "cache_read": 3100000,
+     "cache_write": 210000
+    },
+    "started_at": 1794400000000,
+    "last_active_at": 1794406000000
+   }
+  },
+  "11111111-aaaa-4000-8000-000000000003": {
+   "harness": "claude",
+   "state": "working",
+   "pid": 4004,
+   "tmux_pane": "%21",
+   "dead_since": null,
+   "updated_at": 1794406000000,
+   "message": "",
+   "reason": "event:working",
+   "cwd": "/home/u/src/docs",
+   "transcript_path": "/home/u/.claude/projects/-home-u-src-api/s4.jsonl",
+   "tmux_socket": "/tmp/tmux-1000/default",
+   "tmux_session": "work",
+   "window_index": 4,
+   "window_name": "docs"
+  },
+  "11111111-aaaa-4000-8000-000000000004": {
+   "harness": "pi",
+   "state": "dead",
+   "pid": 4005,
+   "tmux_pane": "%30",
+   "dead_since": 1794405900000,
+   "updated_at": 1794406000000,
+   "message": "",
+   "reason": "liveness:pid_gone",
+   "cwd": "/home/u/src/api",
+   "transcript_path": "/home/u/.claude/projects/-home-u-src-api/s5.jsonl",
+   "tmux_socket": "/tmp/tmux-1000/default",
+   "tmux_session": "work",
+   "window_index": 5,
+   "window_name": "cli"
+  }
+ }
+}

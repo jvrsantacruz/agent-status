@@ -1,0 +1,48 @@
+{
+ "schema_version": 1,
+ "sessions": {
+  "11111111-aaaa-4000-8000-000000000001": {
+   "title": "Fix the flaky login test",
+   "name": "Fix flaky login test",
+   "name_turns": 12,
+   "repo": "/home/u/src/api",
+   "branch": "feat/LAB-7-login",
+   "ticket": "LAB-7",
+   "pr": {
+    "number": 230,
+    "state": "open"
+   },
+   "model": "claude-opus-5-5",
+   "turns": 12,
+   "last_prompt": "the test still fails on CI, check the retry",
+   "tokens": {
+    "input": 1200,
+    "output": 45000,
+    "cache_read": 3100000,
+    "cache_write": 210000
+   },
+   "cost_usd": 2.86,
+   "started_at": 1794400000000,
+   "last_active_at": 1794406000000
+  },
+  "11111111-aaaa-4000-8000-000000000002": {
+   "title": "Add CSV export",
+   "name": "Add CSV export endpoint",
+   "name_turns": 12,
+   "repo": "/home/u/src/api",
+   "branch": "feat/LAB-7-login",
+   "ticket": "#198",
+   "model": "claude-sonnet-5-5",
+   "turns": 12,
+   "last_prompt": "should the export include archived rows?",
+   "tokens": {
+    "input": 1200,
+    "output": 45000,
+    "cache_read": 3100000,
+    "cache_write": 210000
+   },
+   "started_at": 1794400000000,
+   "last_active_at": 1794406000000
+  }
+ }
+}
