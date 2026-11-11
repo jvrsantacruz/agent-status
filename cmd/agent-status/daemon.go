@@ -7,7 +7,9 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -22,6 +24,7 @@ import (
 
 const (
 	livenessEvery = 60 * time.Second
+	tmuxWait      = 5 * time.Second
 	exportEvery   = 10 * time.Second
 	eventsKeep    = 7 * 24 * time.Hour
 	deadKeep      = 5 * time.Minute
@@ -179,9 +182,57 @@ func tick(sm *state.Machine, st *store.Store, now time.Time) bool {
 	sm.PruneDead(deadKeep, now)
 	forgotten := before - len(sm.Snapshot())
 	pruned, err := st.PruneEvents(eventsKeep, now)
+	sockets, placeErrs, placed := setPlaces(sm)
 	slog.Info("liveness", "checked", checked, "no_pid", noPID, "died", died,
-		"forgotten", forgotten, "pruned_events", pruned, "error", errString(err))
-	return died > 0 || forgotten > 0
+		"forgotten", forgotten, "pruned_events", pruned, "error", errString(err),
+		"tmux_servers", sockets, "tmux_errors", placeErrs, "places_changed", placed)
+	return died > 0 || forgotten > 0 || placed
+}
+
+// placeFormat is what list-panes prints per pane, parsed by parsePlaces.
+const placeFormat = "#{pane_id}\t#{session_name}\t#{window_index}\t#{window_name}"
+
+// setPlaces asks each tmux server a session runs on where its panes sit, one
+// call per server. A server that does not answer leaves its sessions as they
+// were. It returns the servers asked, the ones that failed, and whether any
+// session changed.
+func setPlaces(sm *state.Machine) (sockets, failed int, changed bool) {
+	seen := map[string]bool{}
+	for _, s := range sm.Snapshot() {
+		if s.TmuxSocket == "" || s.Pane == "" || seen[s.TmuxSocket] {
+			continue
+		}
+		seen[s.TmuxSocket] = true
+		ctx, cancel := context.WithTimeout(context.Background(), tmuxWait)
+		// -u: without a UTF-8 locale, as under systemd, tmux prints a tab as
+		// "_" and escapes a name that is not ASCII.
+		out, err := exec.CommandContext(ctx, "tmux", "-u", "-S", s.TmuxSocket, "list-panes", "-a", "-F", placeFormat).Output()
+		cancel()
+		if err != nil {
+			failed++
+			continue
+		}
+		changed = sm.SetPlaces(s.TmuxSocket, parsePlaces(string(out))) || changed
+	}
+	return len(seen), failed, changed
+}
+
+// parsePlaces reads list-panes output in placeFormat into places by pane id.
+// A line it cannot read is skipped.
+func parsePlaces(out string) map[string]state.Place {
+	places := map[string]state.Place{}
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.SplitN(line, "\t", 4)
+		if len(f) != 4 || f[0] == "" {
+			continue
+		}
+		index, err := strconv.Atoi(f[2])
+		if err != nil || index < 0 {
+			continue
+		}
+		places[f[0]] = state.Place{Session: f[1], WindowIndex: index, WindowName: f[3]}
+	}
+	return places
 }
 
 func logLevel(s string) slog.Level {

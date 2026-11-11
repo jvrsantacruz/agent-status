@@ -523,6 +523,66 @@ func TestSyncLoadsMarkersIntoTmux(t *testing.T) {
 	}
 }
 
+// req: pane-place
+// The daemon asks the session's tmux server where its pane sits: the tmux
+// session, window index and window name show in state.json.
+func TestDaemonFillsTmuxPlace(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	dir := t.TempDir()
+	sockDir, err := os.MkdirTemp("/tmp", "as")
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(sockDir) })
+	sock := filepath.Join(sockDir, "s")
+	tmux := func(args ...string) string {
+		out, err := exec.Command("tmux", append([]string{"-S", sock, "-f", "/dev/null"}, args...)...).CombinedOutput()
+		require.NoError(t, err, string(out))
+		return strings.TrimSpace(string(out))
+	}
+	tmux("new-session", "-d", "-s", "work", "-n", "first")
+	t.Cleanup(func() { _ = exec.Command("tmux", "-S", sock, "kill-server").Run() })
+	tmux("new-window", "-d", "-t", "work:", "-n", "api ñ")
+	pane := tmux("list-panes", "-t", "work:api", "-F", "#{pane_id}")
+	index := tmux("display-message", "-p", "-t", pane, "#{window_index}")
+
+	daemon := func() *exec.Cmd {
+		d := command(dir, cleanEnv(dir), "daemon")
+		require.NoError(t, d.Start())
+		t.Cleanup(func() { _ = d.Process.Kill() })
+		waitReader(filepath.Join(dir, "in.fifo"))
+		return d
+	}
+	first := daemon()
+	env := cleanEnv(dir, "TMUX="+sock+",1,0", "TMUX_PANE="+pane)
+	out, err := command(dir, env, "emit", "--session", "s", "--pid", strconv.Itoa(os.Getpid()),
+		"--cwd", "/x", "--transcript", "/y.jsonl", "working").CombinedOutput()
+	require.NoError(t, err, string(out))
+	current := func() state.Session {
+		sf, _ := export.Read(filepath.Join(dir, "state.json"))
+		return sf.Sessions["s"]
+	}
+	require.Eventually(t, func() bool { return current().State == state.Working }, 3*time.Second, 20*time.Millisecond)
+	s := current()
+	assert.Equal(t, "/x", s.Cwd)
+	assert.Equal(t, "/y.jsonl", s.Transcript)
+	assert.Equal(t, sock, s.TmuxSocket)
+
+	// The place is asked on each liveness tick, the first as the daemon
+	// starts; a restart stands in for the minute's wait.
+	require.NoError(t, first.Process.Signal(syscall.SIGTERM))
+	require.NoError(t, first.Wait())
+	second := daemon()
+	require.Eventually(t, func() bool { return current().WindowName == "api ñ" }, 15*time.Second, 50*time.Millisecond)
+	s = current()
+	assert.Equal(t, "work", s.TmuxSession)
+	require.NotNil(t, s.WindowIndex)
+	assert.Equal(t, index, strconv.Itoa(*s.WindowIndex))
+	assert.Equal(t, "/x", s.Cwd, "the restart keeps the paths")
+	require.NoError(t, second.Process.Signal(syscall.SIGTERM))
+	require.NoError(t, second.Wait())
+}
+
 // At start tmux loads the plugin before any session exists: sync must wait
 // for the first session, not take the empty server for a gone one.
 func TestSyncStartedBeforeAnySession(t *testing.T) {
