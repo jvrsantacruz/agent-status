@@ -54,8 +54,7 @@ func runSync(args []string, stderr io.Writer) int {
 // lockServer holds a lock per tmux server, named from its socket, for as
 // long as this process lives.
 func lockServer(tmuxEnv string) (*os.File, error) {
-	socket, _, _ := strings.Cut(tmuxEnv, ",")
-	sum := sha256.Sum256([]byte(socket))
+	sum := sha256.Sum256([]byte(tmuxSocket(tmuxEnv)))
 	path := filepath.Join(runtimeDir(), "sync-"+hex.EncodeToString(sum[:8])+".lock")
 	if err := os.MkdirAll(runtimeDir(), 0o700); err != nil {
 		return nil, err

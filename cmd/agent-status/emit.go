@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -34,8 +35,10 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 	pid := fs.Int("pid", defaultPID(),
 		"pid of the agent, the session is dropped when it exits; from $AGENT_STATUS_PID, then $CLAUDE_PID, then the parent process")
 	pane := fs.String("pane", os.Getenv("TMUX_PANE"), "tmux pane id of the agent; from $TMUX_PANE")
+	cwd := fs.String("cwd", defaultCwd(), "working directory of the session; the current directory")
+	transcript := fs.String("transcript", "", "transcript file of the session, absolute")
 	hook := fs.Bool("claude-hook", false,
-		"read the JSON Claude Code gives a hook on stdin: session id, and a message from the notification text or the tool name")
+		"read the JSON Claude Code gives a hook on stdin: session id, working directory, transcript, and a message from the notification text or the tool name")
 	prompt := fs.Bool("prompt", false,
 		"the event starts a turn on a new prompt: nothing an earlier turn declared holds past it; set for Claude's UserPromptSubmit hook")
 	judge := fs.Bool("judge", false,
@@ -70,6 +73,12 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 		if msg == "" {
 			msg = h.message()
 		}
+		if h.Cwd != "" && !flagSet(fs, "cwd") {
+			*cwd = h.Cwd
+		}
+		if h.Transcript != "" && !flagSet(fs, "transcript") {
+			*transcript = h.Transcript
+		}
 		// Only Claude Code runs this hook; a restore resumes by harness name.
 		if *harness == "unknown" && !flagSet(fs, "harness") {
 			*harness = "claude"
@@ -95,7 +104,11 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 		// An agent states its own outcome; a hook reports what the harness saw.
 		Declared: !*hook && (fs.Arg(0) == "done" || fs.Arg(0) == "error"),
 		// An interrupted turn sends no Stop; the next prompt is what ends it.
-		Prompt: *prompt || h.Event == "UserPromptSubmit",
+		Prompt:     *prompt || h.Event == "UserPromptSubmit",
+		Cwd:        *cwd,
+		Transcript: *transcript,
+		// $TMUX is the server's socket path, then its pid and session.
+		TmuxSocket: tmuxSocket(os.Getenv("TMUX")),
 	}
 	if err := send(e); err != nil {
 		fmt.Fprintf(stderr, "agent-status emit: %v\n", err)
@@ -104,8 +117,8 @@ func runEmit(args []string, stdin io.Reader, stderr io.Writer) int {
 		}
 		return 0
 	}
-	if *judge && h.Event == "Stop" && h.Transcript != "" {
-		if err := startJudge(e, h.Transcript); err != nil {
+	if *judge && h.Event == "Stop" && *transcript != "" {
+		if err := startJudge(e, *transcript); err != nil {
 			fmt.Fprintf(stderr, "agent-status emit: judge: %v\n", err)
 		}
 	}
@@ -162,6 +175,16 @@ func defaultHarness() string {
 		return "claude"
 	}
 	return "unknown"
+}
+
+func defaultCwd() string {
+	dir, _ := os.Getwd()
+	return dir
+}
+
+func tmuxSocket(tmuxEnv string) string {
+	socket, _, _ := strings.Cut(tmuxEnv, ",")
+	return socket
 }
 
 func defaultPID() int {

@@ -146,6 +146,50 @@ func TestEmitFlagsForAnyAgent(t *testing.T) {
 	assert.Equal(t, float64(77), m["pid"])
 }
 
+// req: pane-place
+// emit sends where the session runs: its directory, transcript and tmux
+// server, from the hook input, the flags or the environment.
+func TestEmitPaths(t *testing.T) {
+	cases := map[string]struct {
+		args            []string
+		stdin           string
+		cwd, transcript string // an empty cwd is the directory emit runs in
+	}{
+		"flags": {[]string{"--session", "s", "--cwd", "/x", "--transcript", "/y.jsonl", "working"}, "",
+			"/x", "/y.jsonl"},
+		"claude hook": {[]string{"--claude-hook", "working"},
+			`{"session_id":"s","hook_event_name":"PreToolUse","tool_name":"Bash","cwd":"/src/api","transcript_path":"/t/s.jsonl"}`,
+			"/src/api", "/t/s.jsonl"},
+		"flags win over the hook": {[]string{"--claude-hook", "--cwd", "/x", "--transcript", "/y.jsonl", "working"},
+			`{"session_id":"s","hook_event_name":"PreToolUse","cwd":"/src/api","transcript_path":"/t/s.jsonl"}`,
+			"/x", "/y.jsonl"},
+		"the current directory by default": {[]string{"--session", "s", "working"}, "", "", ""},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			ch := readOne(t, filepath.Join(dir, "in.fifo"))
+			cmd := command(dir, cleanEnv(dir, "TMUX=/tmp/tmux-1000/default,4242,0"), append([]string{"emit"}, c.args...)...)
+			cmd.Stdin = strings.NewReader(c.stdin)
+			out, err := cmd.CombinedOutput()
+			require.NoError(t, err, string(out))
+			m := emitted(t, ch)
+			if c.cwd == "" {
+				// On macOS the temp dir is behind a symlink.
+				c.cwd, err = filepath.EvalSymlinks(dir)
+				require.NoError(t, err)
+			}
+			assert.Equal(t, c.cwd, m["cwd"])
+			if c.transcript == "" {
+				assert.NotContains(t, m, "transcript_path")
+			} else {
+				assert.Equal(t, c.transcript, m["transcript_path"])
+			}
+			assert.Equal(t, "/tmp/tmux-1000/default", m["tmux_socket"])
+		})
+	}
+}
+
 // req: never-blocks
 func TestEmitWithoutDaemonExitsZero(t *testing.T) {
 	dir := t.TempDir()

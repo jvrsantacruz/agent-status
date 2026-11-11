@@ -40,3 +40,18 @@ func TestClaudeHookBadInput(t *testing.T) {
 	_, err := readClaudeHook(strings.NewReader("not json"))
 	assert.ErrorContains(t, err, "parse hook input")
 }
+
+// Claude sends the working directory and transcript to every hook.
+func TestClaudeHookPaths(t *testing.T) {
+	t.Parallel()
+	h, err := readClaudeHook(strings.NewReader(`{"session_id":"s","transcript_path":"/home/u/.claude/projects/-home-u-src-api/s.jsonl","cwd":"/home/u/src/api","hook_event_name":"PreToolUse","tool_name":"Bash"}`))
+	require.NoError(t, err)
+	assert.Equal(t, "/home/u/src/api", h.Cwd)
+	assert.Equal(t, "/home/u/.claude/projects/-home-u-src-api/s.jsonl", h.Transcript)
+}
+
+func TestTmuxSocket(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, "/tmp/tmux-1000/default", tmuxSocket("/tmp/tmux-1000/default,4242,0"))
+	assert.Empty(t, tmuxSocket(""), "outside tmux")
+}
