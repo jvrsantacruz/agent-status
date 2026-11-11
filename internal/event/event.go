@@ -26,6 +26,11 @@ type Event struct {
 	// Prompt marks the event that starts a turn: nothing declared in an
 	// earlier turn holds past it, even when that turn never ended.
 	Prompt bool `json:"prompt,omitempty"`
+	// Cwd and Transcript are absolute paths: the session's working directory
+	// and its transcript file. TmuxSocket is the socket of the pane's server.
+	Cwd        string `json:"cwd,omitempty"`
+	Transcript string `json:"transcript_path,omitempty"`
+	TmuxSocket string `json:"tmux_socket,omitempty"`
 }
 
 func (e *Event) Time() time.Time {
@@ -39,12 +44,14 @@ func (e *Event) Time() time.Time {
 const MaxLine = 512
 
 // ErrTooLong is returned when an event does not fit in MaxLine even with
-// no message.
-var ErrTooLong = errors.New("event longer than 512 bytes without its message: session id, harness or pane too long")
+// no message and no paths.
+var ErrTooLong = errors.New("event longer than 512 bytes without its message and paths: session id, harness or pane too long")
 
 // MarshalLine encodes the event as one JSON line of at most MaxLine bytes,
 // as the FIFO carries it. A message that does not fit is cut to its longest
-// prefix that fits, on a character boundary, ending in "...".
+// prefix that fits, on a character boundary, ending in "...". When the event
+// does not fit even without a message, the transcript path, the working
+// directory and the tmux socket are dropped, in that order.
 func (e Event) MarshalLine() ([]byte, error) {
 	line, err := e.line()
 	if err != nil || len(line) <= MaxLine {
@@ -52,11 +59,23 @@ func (e Event) MarshalLine() ([]byte, error) {
 	}
 	full := e.Message
 	e.Message = ""
-	if line, err = e.line(); err != nil || len(line) > MaxLine {
-		if err == nil {
-			err = ErrTooLong
+	drop := []*string{&e.Transcript, &e.Cwd, &e.TmuxSocket}
+	for {
+		if line, err = e.line(); err != nil {
+			return nil, err
 		}
-		return nil, err
+		if len(line) <= MaxLine {
+			break
+		}
+		if len(drop) == 0 {
+			return nil, ErrTooLong
+		}
+		*drop[0], drop = "", drop[1:]
+	}
+	// With paths dropped, the whole message may fit again.
+	e.Message = full
+	if l, err := e.line(); err == nil && len(l) <= MaxLine {
+		return l, nil
 	}
 	// Escaping makes JSON longer than the text by a varying amount, so
 	// search for the longest prefix that fits: lo always fits, hi never.

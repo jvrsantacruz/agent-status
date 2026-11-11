@@ -122,3 +122,71 @@ func TestMarshalLineTooLongWithoutMessage(t *testing.T) {
 	_, err := Event{SessionID: strings.Repeat("s", MaxLine), Message: "m"}.MarshalLine()
 	assert.ErrorIs(t, err, ErrTooLong)
 }
+
+// A line too long loses the message first, then the transcript path, the
+// working directory and the tmux socket, in that order.
+func TestMarshalLineDropsPathsInOrder(t *testing.T) {
+	t.Parallel()
+	base := Event{SessionID: "s1", Harness: "claude", Event: "working", PID: 1, Pane: "%1", TimestampMs: 1793359277515}
+	long := "/" + strings.Repeat("p", 400)
+	short := "/home/u/src/api"
+	cases := map[string]struct {
+		in, want     Event
+		cutMessage   bool
+		keepsMessage bool
+	}{
+		"fits as is": {
+			in:   Event{Message: "Bash", Cwd: short, Transcript: short + "/t.jsonl", TmuxSocket: "/tmp/tmux-1000/default"},
+			want: Event{Message: "Bash", Cwd: short, Transcript: short + "/t.jsonl", TmuxSocket: "/tmp/tmux-1000/default"},
+		},
+		"message cut before any path": {
+			in:         Event{Message: strings.Repeat("m", 600), Cwd: short, Transcript: short, TmuxSocket: short},
+			want:       Event{Cwd: short, Transcript: short, TmuxSocket: short},
+			cutMessage: true,
+		},
+		"transcript dropped first": {
+			in:   Event{Cwd: short, Transcript: long, TmuxSocket: short},
+			want: Event{Cwd: short, TmuxSocket: short},
+		},
+		"then the working directory": {
+			in:   Event{Cwd: long, Transcript: long, TmuxSocket: short},
+			want: Event{TmuxSocket: short},
+		},
+		"then the socket": {
+			in:   Event{Cwd: long, Transcript: long, TmuxSocket: long + long},
+			want: Event{},
+		},
+		"the message comes back once the paths are gone": {
+			in:           Event{Message: "Bash", Transcript: long + long},
+			want:         Event{Message: "Bash"},
+			keepsMessage: true,
+		},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			e := c.in
+			e.SessionID, e.Harness, e.Event, e.PID, e.Pane, e.TimestampMs = base.SessionID, base.Harness, base.Event, base.PID, base.Pane, base.TimestampMs
+			line, err := e.MarshalLine()
+			require.NoError(t, err)
+			assert.LessOrEqual(t, len(line), MaxLine)
+			var out Event
+			require.NoError(t, json.Unmarshal(line, &out))
+			assert.Equal(t, c.want.Cwd, out.Cwd)
+			assert.Equal(t, c.want.Transcript, out.Transcript)
+			assert.Equal(t, c.want.TmuxSocket, out.TmuxSocket)
+			if c.cutMessage {
+				assert.True(t, strings.HasSuffix(out.Message, "..."))
+				assert.Greater(t, len(out.Message), 3, "the message keeps what fits")
+			} else {
+				assert.Equal(t, c.want.Message, out.Message)
+			}
+		})
+	}
+}
+
+func TestMarshalLineTooLongWithoutPaths(t *testing.T) {
+	t.Parallel()
+	_, err := Event{SessionID: strings.Repeat("s", MaxLine), Cwd: "/x", Transcript: "/y", TmuxSocket: "/z"}.MarshalLine()
+	assert.ErrorIs(t, err, ErrTooLong)
+}
