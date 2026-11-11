@@ -4,6 +4,7 @@
 package state
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -251,4 +252,14 @@ func TestDeclaredOutcomeShowsWhenTheTurnEnds(t *testing.T) {
 			assert.Equal(t, tc.message, s.Message)
 		})
 	}
+}
+
+func TestSetMetaKeepsItAcrossEvents(t *testing.T) {
+	m := NewMachine()
+	m.SetMeta("s", json.RawMessage(`{"turns":1}`))
+	assert.Empty(t, m.Snapshot(), "an unknown session is not made")
+	m.Apply(event.Event{SessionID: "s", Event: "working"})
+	m.SetMeta("s", json.RawMessage(`{"turns":1}`))
+	m.Apply(event.Event{SessionID: "s", Event: "idle"})
+	assert.JSONEq(t, `{"turns":1}`, string(m.Snapshot()["s"].Meta))
 }

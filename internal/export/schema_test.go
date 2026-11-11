@@ -4,6 +4,7 @@
 package export
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,6 +78,7 @@ func TestWriteMatchesSchema(t *testing.T) {
 				"e": {State: state.Error, Message: "error: rate_limit", Reason: "event:error"},
 				"u": {State: state.Idle, Reason: "event:unknown(paused)"},
 				"d": {State: state.Dead, DeadSince: &dead, Reason: "liveness:pid_gone"},
+				"m": {State: state.Idle, Reason: "event:idle", Meta: json.RawMessage(`{"name":"Fix login","turns":3,"pr":{"number":1,"state":"open"}}`)},
 			},
 		},
 	}
