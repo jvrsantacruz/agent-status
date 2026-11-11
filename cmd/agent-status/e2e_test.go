@@ -286,6 +286,7 @@ func TestDaemonDoctorRoundTrip(t *testing.T) {
 	assert.Contains(t, string(report), `ok    render        marker "#{E:@agent_mark_question}"`)
 	assert.Contains(t, string(report), "nopid  harness=unknown state=working pid=0 pane=%5 reason=event:working")
 	assert.Contains(t, string(report), "warn  pid")
+	assert.Contains(t, string(report), "warn  enrich        no ")
 
 	sf, err := export.Read(filepath.Join(dir, "state.json"))
 	require.NoError(t, err)
