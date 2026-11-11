@@ -83,6 +83,7 @@ func TestNamer(t *testing.T) {
 		{"a turn ended since the last name", "idle", Meta{Name: "Old", NameTurns: 1}, "New name", nil, Meta{Name: "New name", NameTurns: 2}, true},
 		{"no turn since", "question", Meta{Name: "Old", NameTurns: 2}, "", nil, Meta{Name: "Old", NameTurns: 2}, false},
 		{"the turn still runs", "working", Meta{Name: "Old", NameTurns: 1}, "", nil, Meta{Name: "Old", NameTurns: 1}, false},
+		{"busy since it started: the title's words until the turn ends", "working", Meta{}, "", nil, Meta{Name: "Neutral session title LAB-42"}, false},
 		{"namer fails: the title's first words", "idle", Meta{}, "", errors.New("no claude"), Meta{Name: "Neutral session title LAB-42", NameTurns: 2}, true},
 		{"too long: four words", "idle", Meta{}, "one two three four five", nil, Meta{Name: "one two three four", NameTurns: 2}, true},
 	}

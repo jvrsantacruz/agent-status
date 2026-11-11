@@ -118,8 +118,13 @@ func Enrich(ctx context.Context, s Session, old Meta, name Namer) Meta {
 	}
 
 	m.Name, m.NameTurns = old.Name, old.NameTurns
-	if f.Turns > old.NameTurns && s.State != "working" {
+	switch {
+	case f.Turns > old.NameTurns && s.State != "working":
 		m.Name, m.NameTurns = makeName(ctx, s, f, name), f.Turns
+	case m.Name == "":
+		// A session busy since it started has a name from its title until the
+		// namer may run; name_turns stays, so the namer runs when the turn ends.
+		m.Name = titleName(f)
 	}
 	return m
 }
@@ -134,6 +139,11 @@ func makeName(ctx context.Context, s Session, f transcript.Facts, name Namer) st
 			return n
 		}
 	}
+	return titleName(f)
+}
+
+// titleName is the first words of the title, else of the first prompt.
+func titleName(f transcript.Facts) string {
 	if n := words(f.Title); n != "" {
 		return n
 	}
