@@ -146,7 +146,7 @@ func TestEmitFlagsForAnyAgent(t *testing.T) {
 	assert.Equal(t, float64(77), m["pid"])
 }
 
-// req: pane-place
+// req: readable-record
 // emit sends where the session runs: its directory, transcript and tmux
 // server, from the hook input, the flags or the environment.
 func TestEmitPaths(t *testing.T) {
@@ -524,7 +524,7 @@ func TestSyncLoadsMarkersIntoTmux(t *testing.T) {
 	}
 }
 
-// req: pane-place
+// req: readable-record
 // The daemon asks the session's tmux server where its pane sits: the tmux
 // session, window index and window name show in state.json.
 func TestDaemonFillsTmuxPlace(t *testing.T) {

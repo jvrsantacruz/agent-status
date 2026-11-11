@@ -44,11 +44,14 @@ rebuilt: fix forward with a new patch version.
 
 | Path | What |
 |---|---|
-| `cmd/agent-status/` | Commands: `daemon`, `emit`, `sync`, `render`, `doctor`, `version`; `paths.go` is the one place paths are decided |
+| `cmd/agent-status/` | Commands: `daemon`, `emit`, `enrich`, `sync`, `render`, `doctor`, `version`; `paths.go` is the one place paths are decided |
 | `internal/event` | Event type and FIFO reader |
 | `internal/state` | State machine, one session per `session_id` |
 | `internal/store` | SQLite event history, 7 days |
 | `internal/export` | `state.json` read and write |
+| `internal/transcript` | Claude Code and pi transcript readers, shared by judge and enrich |
+| `internal/price` | dollars per reply, a price table per model |
+| `internal/enrich` | one session's metadata from its transcript, git, gh and the namer |
 | `agent-status.tmux` | TPM plugin |
 | `examples/` | Claude Code hooks, a generic wrapper emitter |
 | `packaging/` | systemd user unit for the .deb and .rpm |
@@ -66,7 +69,7 @@ rebuilt: fix forward with a new patch version.
 - `render` and `sync` print nothing on any error: their output is the tmux status line. Errors belong in
   `doctor` and the daemon log.
 - The daemon logs one wide event per unit of work, not scattered lines.
-- No message text on disk outside `state.json`; files 0600, directories 0700; no network access except the opt-in judge, which calls `claude` and never runs in the daemon.
+- No message text on disk outside `state.json` and `meta.json`; files 0600, directories 0700; no network access except the opt-in judge and the enrich run's namer and `gh` read calls, each a separate process, never the daemon.
 - Tests: testify; e2e tests build the binary and run it with a clean environment, see `cleanEnv`.
 - Every Go and shell file starts with `SPDX-License-Identifier: GPL-3.0-or-later`.
 - Commits: `<area>: <what changed>`, signed off (`git commit -s`). User-visible changes go in

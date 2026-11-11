@@ -9,7 +9,8 @@ session's state and event history, marks a session dead when its process exits, 
 state.json once a second. The **tmux plugin** starts sync. The **render command** prints a
 pane's marker for themes; the **doctor command** sends a test session through the FIFO. Neither is drawn. How a turn's outcome is set is in
 [agent-status-outcome-spec](agent-status-outcome-spec.md); how a restore resumes a session is in
-[agent-status-resurrect-spec](agent-status-resurrect-spec.md).
+[agent-status-resurrect-spec](agent-status-resurrect-spec.md); how a session gets its place and metadata is in
+[agent-status-enrich-spec](agent-status-enrich-spec.md).
 
 unit: one agent session; every part above keeps or shows sessions.
 
@@ -67,6 +68,7 @@ Requirements: `window-marks`.
 | entity | stored in | key | shape | written by | kept for |
 | --- | --- | --- | --- | --- | --- |
 | session | state.json | session id; pane id joins a tmux pane | [state.schema.json](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json) | daemon | while live, then the dead keep time in `cmd/agent-status/daemon.go`, across restarts |
+| session metadata | meta.json | session id | [meta.schema.json](https://github.com/jvrsantacruz/agent-status/blob/main/schema/meta.schema.json) | enrich | while the session is live |
 | event | state.db | row id; session id joins a session | session id, harness, event, process id, pane, sent and received time, understood; no message text | daemon | the retention in `cmd/agent-status/daemon.go` |
 
 state.json and state.db live in the state directory, `~/.local/state/agent-status` by default;
@@ -96,8 +98,8 @@ _Session states. A harness event moves to the state it names, except the idle th
 
 ## validation
 
-fixtures: [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go) and [resurrect-e2e](https://github.com/jvrsantacruz/agent-status/blob/main/tools/resurrect-e2e): the real binary in a clean environment, fed emit calls, saved Claude Code hook inputs, saved transcripts or written state.json files, for each state, a dead session, a restart, no daemon, sync on a scratch tmux server started before any session, one Claude turn with a fake model command for each verdict, a declared done followed by a tool hook and the stop, by a harness error, or by an interrupted turn and a new prompt, Claude's idle reminder after each outcome, plus a real save and restore on a scratch tmux server with one live and one exited session; expected outputs from hand-checked state.json, render values, pane options and the restored pane commands; compared exactly.
+fixtures: [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go) and [resurrect-e2e](https://github.com/jvrsantacruz/agent-status/blob/main/tools/resurrect-e2e): the real binary in a clean environment, fed emit calls, saved Claude Code hook inputs, saved transcripts or written state.json files, for each state, a dead session, a restart, no daemon, sync on a scratch tmux server started before any session, one Claude turn with a fake model command for each verdict, a declared done followed by a tool hook and the stop, by a harness error, or by an interrupted turn and a new prompt, Claude's idle reminder after each outcome, plus a real save and restore on a scratch tmux server with one live and one exited session, and for enrich saved Claude Code and pi transcripts with their text replaced, a scratch git repository on a ticket branch and fake gh and namer commands; expected outputs from hand-checked state.json, render values, pane options and the restored pane commands; compared exactly.
 
 - `never-blocks` (test, [e2e tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/e2e_test.go)): with no daemon, or a full FIFO never read, emit exits 0 within its write timeout.
 - `private-text` (test, [hook tests](https://github.com/jvrsantacruz/agent-status/blob/main/cmd/agent-status/hook_test.go)): the message kept from hook input is only the notification text, the tool name or the error type, such as rate_limit.
-- `local-only` (inspection, [AGENTS.md](https://github.com/jvrsantacruz/agent-status/blob/main/AGENTS.md)): no package opens a network connection; the judge's model call is the `claude` command's.
+- `local-only` (inspection, [AGENTS.md](https://github.com/jvrsantacruz/agent-status/blob/main/AGENTS.md)): no package opens a network connection; the judge's and the namer's model calls are the `claude` command's, and the pull request lookup is the `gh` command's.

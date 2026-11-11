@@ -86,7 +86,7 @@ func (r enrichRig) enrich() map[string]any {
 
 // req: session-metadata
 // req: short-name
-// req: read-only-enrich
+// req: read-only
 func TestEnrichWritesMetaAndTheDaemonMergesIt(t *testing.T) {
 	r := newEnrichRig(t, `echo '{"number":7,"state":"OPEN"}'`)
 	r.enrich()
@@ -148,7 +148,7 @@ func TestEnrichWritesMetaAndTheDaemonMergesIt(t *testing.T) {
 	}
 }
 
-// req: read-only-enrich
+// req: read-only
 // A gh that hangs costs the pull request only.
 func TestEnrichSlowGhLeavesPROut(t *testing.T) {
 	r := newEnrichRig(t, `sleep 30`)
