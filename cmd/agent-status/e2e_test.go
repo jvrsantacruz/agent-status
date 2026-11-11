@@ -569,17 +569,21 @@ func TestDaemonFillsTmuxPlace(t *testing.T) {
 	assert.Equal(t, "/y.jsonl", s.Transcript)
 	assert.Equal(t, sock, s.TmuxSocket)
 
-	// The place is asked on each liveness tick, the first as the daemon
-	// starts; a restart stands in for the minute's wait.
-	require.NoError(t, first.Process.Signal(syscall.SIGTERM))
-	require.NoError(t, first.Wait())
-	second := daemon()
+	// A new session's place is asked on its first event, well before the
+	// next liveness tick; the export tick writes it.
 	require.Eventually(t, func() bool { return current().WindowName == "api ñ" }, 15*time.Second, 50*time.Millisecond)
 	s = current()
 	assert.Equal(t, "work", s.TmuxSession)
 	require.NotNil(t, s.WindowIndex)
 	assert.Equal(t, index, strconv.Itoa(*s.WindowIndex))
-	assert.Equal(t, "/x", s.Cwd, "the restart keeps the paths")
+
+	// The place and the paths survive a restart.
+	require.NoError(t, first.Process.Signal(syscall.SIGTERM))
+	require.NoError(t, first.Wait())
+	second := daemon()
+	require.Eventually(t, func() bool { return current().State == state.Working }, 3*time.Second, 20*time.Millisecond)
+	assert.Equal(t, "/x", current().Cwd, "the restart keeps the paths")
+	assert.Equal(t, "api ñ", current().WindowName, "the restart keeps the place")
 	require.NoError(t, second.Process.Signal(syscall.SIGTERM))
 	require.NoError(t, second.Wait())
 }

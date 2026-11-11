@@ -105,6 +105,14 @@ func runDaemon() int {
 			c.total.Add(1)
 			c.lastEventAt.Store(now.UnixMilli())
 			notify()
+			// A new session gets its place now, not at the next liveness tick.
+			if socket, ok := needsPlace(sm, e.SessionID); ok {
+				go func() {
+					if c, err := setPlacesOn(sm, socket); err == nil && c {
+						notify()
+					}
+				}()
+			}
 			slog.Info("event",
 				"session_id", e.SessionID, "harness", e.Harness, "event", e.Event,
 				"known_event", out.Known, "prev_state", out.Prev, "new_state", out.Next,
@@ -227,18 +235,37 @@ func setPlaces(sm *state.Machine) (sockets, failed int, changed bool) {
 			continue
 		}
 		seen[s.TmuxSocket] = true
-		ctx, cancel := context.WithTimeout(context.Background(), tmuxWait)
-		// -u: without a UTF-8 locale, as under systemd, tmux prints a tab as
-		// "_" and escapes a name that is not ASCII.
-		out, err := exec.CommandContext(ctx, "tmux", "-u", "-S", s.TmuxSocket, "list-panes", "-a", "-F", placeFormat).Output()
-		cancel()
+		c, err := setPlacesOn(sm, s.TmuxSocket)
 		if err != nil {
 			failed++
 			continue
 		}
-		changed = sm.SetPlaces(s.TmuxSocket, parsePlaces(string(out))) || changed
+		changed = c || changed
 	}
 	return len(seen), failed, changed
+}
+
+// setPlacesOn asks one tmux server where its panes sit.
+func setPlacesOn(sm *state.Machine, socket string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), tmuxWait)
+	defer cancel()
+	// -u: without a UTF-8 locale, as under systemd, tmux prints a tab as
+	// "_" and escapes a name that is not ASCII.
+	out, err := exec.CommandContext(ctx, "tmux", "-u", "-S", socket, "list-panes", "-a", "-F", placeFormat).Output()
+	if err != nil {
+		return false, err
+	}
+	return sm.SetPlaces(socket, parsePlaces(string(out))), nil
+}
+
+// needsPlace reports the socket of a session in tmux that has no place yet:
+// a new session, or one that moved pane.
+func needsPlace(sm *state.Machine, id string) (string, bool) {
+	s, ok := sm.Snapshot()[id]
+	if !ok || s.TmuxSocket == "" || s.Pane == "" || s.TmuxSession != "" {
+		return "", false
+	}
+	return s.TmuxSocket, true
 }
 
 // parsePlaces reads list-panes output in placeFormat into places by pane id.
