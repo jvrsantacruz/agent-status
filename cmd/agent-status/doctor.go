@@ -21,7 +21,11 @@ import (
 	"github.com/jvrsantacruz/agent-status/internal/store"
 )
 
-const roundTripWait = 2 * time.Second
+const (
+	roundTripWait = 2 * time.Second
+	// metaStale is three enrich runs missed.
+	metaStale = 3 * time.Minute
+)
 
 // runDoctor checks the real installation, from emit to render, and prints a
 // report to paste in a bug report. Exit 1 when a check fails.
@@ -56,6 +60,7 @@ func runDoctor(w io.Writer) int {
 		fmt.Sprintf("daemon %s pid %d, this binary %s", sf.Daemon.Version, sf.Daemon.PID, buildVersion()))
 
 	roundTrip(check)
+	metaAge(report)
 	wiring(report, check)
 	// Read again: the round trip went through the FIFO after every event
 	// sent before doctor started, so all of them are in by now.
@@ -114,6 +119,20 @@ func removeSession(e event.Event) {
 			}
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// metaAge warns when the enrich run the daemon starts every minute has not
+// written meta.json lately.
+func metaAge(report func(string, string, string)) {
+	info, err := os.Stat(metaPath())
+	switch {
+	case err != nil:
+		report("warn", "enrich", fmt.Sprintf("no %s yet; the daemon runs agent-status enrich every minute", metaPath()))
+	case clock().Sub(info.ModTime()) > metaStale:
+		report("warn", "enrich", fmt.Sprintf("%s is %s old; run agent-status enrich to see why", metaPath(), clock().Sub(info.ModTime()).Round(time.Second)))
+	default:
+		report("ok", "enrich", fmt.Sprintf("%s written %s ago", metaPath(), clock().Sub(info.ModTime()).Round(time.Second)))
 	}
 }
 

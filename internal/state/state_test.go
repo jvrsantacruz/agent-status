@@ -4,6 +4,7 @@
 package state
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -300,4 +301,14 @@ func TestSetPlaces(t *testing.T) {
 	assert.Empty(t, moved.TmuxSession, "another pane drops the old place")
 	assert.Nil(t, moved.WindowIndex)
 	assert.Equal(t, sock, moved.TmuxSocket)
+}
+
+func TestSetMetaKeepsItAcrossEvents(t *testing.T) {
+	m := NewMachine()
+	m.SetMeta("s", json.RawMessage(`{"turns":1}`))
+	assert.Empty(t, m.Snapshot(), "an unknown session is not made")
+	m.Apply(event.Event{SessionID: "s", Event: "working"})
+	m.SetMeta("s", json.RawMessage(`{"turns":1}`))
+	m.Apply(event.Event{SessionID: "s", Event: "idle"})
+	assert.JSONEq(t, `{"turns":1}`, string(m.Snapshot()["s"].Meta))
 }

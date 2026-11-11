@@ -4,11 +4,8 @@
 package main
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -20,14 +17,13 @@ import (
 	"github.com/jvrsantacruz/agent-status/internal/event"
 	"github.com/jvrsantacruz/agent-status/internal/export"
 	"github.com/jvrsantacruz/agent-status/internal/state"
+	"github.com/jvrsantacruz/agent-status/internal/transcript"
 )
 
 const (
-	judgeWait = time.Minute
+	modelWait = time.Minute
 	// catchUpWait bounds how long judge waits for state.json to hold its stop.
 	catchUpWait = 5 * time.Second
-	// turnBytes bounds the end of the turn the model reads.
-	turnBytes = 6000
 )
 
 const judgePrompt = `You read the end of a coding agent's turn and say how it ended, from its
@@ -42,17 +38,6 @@ When unsure, answer idle.
 
 The turn:
 `
-
-// judgeCommand is the model call; AGENT_STATUS_JUDGE_COMMAND replaces it,
-// as a shell command that reads the prompt on stdin.
-func judgeCommand(ctx context.Context) *exec.Cmd {
-	if c := os.Getenv("AGENT_STATUS_JUDGE_COMMAND"); c != "" {
-		return exec.CommandContext(ctx, "sh", "-c", c)
-	}
-	// Hooks off, so the call is not a session of its own; no transcript kept.
-	return exec.CommandContext(ctx, "claude", "-p", "--model", "haiku",
-		"--settings", `{"disableAllHooks":true}`, "--no-session-persistence")
-}
 
 // startJudge runs judge detached from the hook, so the hook returns at once
 // and the agent never waits on the model.
@@ -81,11 +66,11 @@ func runJudge(args []string, stderr io.Writer) int {
 	pid := fs.Int("pid", 0, "agent pid")
 	pane := fs.String("pane", "", "tmux pane id")
 	since := fs.Int64("since", 0, "timestamp of the idle event that ended the turn, in ms")
-	transcript := fs.String("transcript", "", "the session's JSONL transcript")
-	if err := fs.Parse(args); err != nil || *session == "" || *transcript == "" {
+	transcriptPath := fs.String("transcript", "", "the session's JSONL transcript")
+	if err := fs.Parse(args); err != nil || *session == "" || *transcriptPath == "" {
 		return 0
 	}
-	turn, err := lastTurn(*transcript)
+	turn, err := transcript.LastTurn(*transcriptPath)
 	if err != nil || turn == "" {
 		return 0
 	}
@@ -100,17 +85,32 @@ func runJudge(args []string, stderr io.Writer) int {
 
 // ask returns the model's verdict, or "" when it gives none of the four.
 func ask(turn string) state.SessionState {
-	ctx, cancel := context.WithTimeout(context.Background(), judgeWait)
-	defer cancel()
-	cmd := judgeCommand(ctx)
-	cmd.Stdin = strings.NewReader(judgePrompt + turn)
-	// A Claude session refuses to start inside another one.
-	cmd.Env = withoutEnv(os.Environ(), "CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PID")
-	out, err := cmd.Output()
+	out, err := askModel(context.Background(), "AGENT_STATUS_JUDGE_COMMAND", judgePrompt+turn)
 	if err != nil {
 		return ""
 	}
-	return verdict(string(out))
+	return verdict(out)
+}
+
+// askModel sends prompt to the model and returns its answer. envVar names a
+// shell command that replaces the model call and reads the prompt on stdin.
+func askModel(ctx context.Context, envVar, prompt string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, modelWait)
+	defer cancel()
+	var cmd *exec.Cmd
+	if c := os.Getenv(envVar); c != "" {
+		cmd = exec.CommandContext(ctx, "sh", "-c", c)
+	} else {
+		// Hooks off, so the call is not a session of its own; no transcript kept.
+		cmd = exec.CommandContext(ctx, "claude", "-p", "--model", "haiku",
+			"--settings", `{"disableAllHooks":true}`, "--no-session-persistence")
+	}
+	cmd.Stdin = strings.NewReader(prompt)
+	// A Claude session refuses to start inside another one.
+	cmd.Env = withoutEnv(os.Environ(), "CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PID")
+	cmd.WaitDelay = time.Second
+	out, err := cmd.Output()
+	return string(out), err
 }
 
 func verdict(out string) state.SessionState {
@@ -158,74 +158,4 @@ func withoutEnv(env []string, keys ...string) []string {
 		}
 	}
 	return out
-}
-
-// transcriptLine is the part of a Claude Code transcript line lastTurn reads.
-type transcriptLine struct {
-	Type    string `json:"type"`
-	Message struct {
-		Content json.RawMessage `json:"content"`
-	} `json:"message"`
-}
-
-type contentBlock struct {
-	Type    string `json:"type"`
-	Text    string `json:"text"`
-	Name    string `json:"name"`
-	IsError bool   `json:"is_error"`
-}
-
-// lastTurn renders the last user prompt and what the agent did after it:
-// its text, the tools it called and which of them failed. Tool input and
-// output are left out; the end is kept when it is long.
-func lastTurn(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	var turn []string
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 1<<20), 16<<20)
-	for sc.Scan() {
-		var l transcriptLine
-		if json.Unmarshal(sc.Bytes(), &l) != nil || (l.Type != "user" && l.Type != "assistant") {
-			continue
-		}
-		var text string
-		if json.Unmarshal(l.Message.Content, &text) == nil {
-			if l.Type == "user" {
-				turn = []string{"USER: " + text}
-			}
-			continue
-		}
-		var blocks []contentBlock
-		if json.Unmarshal(l.Message.Content, &blocks) != nil {
-			continue
-		}
-		for _, b := range blocks {
-			switch {
-			case b.Type == "text" && l.Type == "user":
-				turn = []string{"USER: " + b.Text}
-			case b.Type == "text":
-				turn = append(turn, "AGENT: "+b.Text)
-			case b.Type == "tool_use":
-				turn = append(turn, "TOOL: "+b.Name)
-			case b.Type == "tool_result" && b.IsError:
-				turn = append(turn, "TOOL FAILED")
-			}
-		}
-	}
-	if err := sc.Err(); err != nil {
-		return "", err
-	}
-	// A turn ends with the agent's message; anything else is still running.
-	if len(turn) == 0 || !strings.HasPrefix(turn[len(turn)-1], "AGENT: ") {
-		return "", nil
-	}
-	out := strings.Join(turn, "\n")
-	if len(out) > turnBytes {
-		out = fmt.Sprintf("...%s", out[len(out)-turnBytes:])
-	}
-	return out, nil
 }

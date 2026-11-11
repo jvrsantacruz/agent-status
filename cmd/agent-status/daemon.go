@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -125,6 +126,9 @@ func runDaemon() int {
 				if tick(sm, st, now) {
 					notify()
 				}
+				if err := startEnrich(); err != nil {
+					slog.Error("enrich start", "error", err)
+				}
 			}
 		}
 	}()
@@ -139,6 +143,7 @@ func runDaemon() int {
 			case <-changed:
 			case <-ticker.C:
 			}
+			mergeMeta(sm)
 			if err := export.Write(stateJSON, snapshot()); err != nil {
 				slog.Error("export", "error", err)
 			}
@@ -157,6 +162,25 @@ func runDaemon() int {
 		return 1
 	}
 	return 0
+}
+
+// mergeMeta copies each meta.json entry into its session's meta. A missing
+// or bad file leaves every meta as it was.
+func mergeMeta(sm *state.Machine) {
+	data, err := os.ReadFile(metaPath())
+	var mf struct {
+		Sessions map[string]json.RawMessage `json:"sessions"`
+	}
+	if err == nil {
+		err = json.Unmarshal(data, &mf)
+	}
+	if err != nil {
+		slog.Warn("meta", "error", err)
+		return
+	}
+	for id, m := range mf.Sessions {
+		sm.SetMeta(id, m)
+	}
 }
 
 // tick marks sessions whose agent has exited as dead, forgets old ones and

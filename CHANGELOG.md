@@ -22,6 +22,12 @@
 - tmux: markers show again after tmux restarts. tmux loads the plugin before any session exists,
   and `sync` took that empty server for a gone one and exited, so no window had a marker until
   the plugin was reloaded.
+- `agent-status enrich`, which the daemon starts every minute: each live session's title, a
+  short name a small model makes, git repository, branch, ticket, pull request (`gh`, read only),
+  model, turns, last prompt (200 characters), tokens and cost, from its transcript (Claude Code
+  or pi), into `meta.json` (mode 0600). The daemon copies each entry into the session's `meta`
+  in `state.json`. `AGENT_STATUS_NAMER_COMMAND` replaces the model call. `doctor` warns when
+  `meta.json` is older than 3 minutes.
 
 ## 0.3.1
 

@@ -4,6 +4,7 @@
 package export
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,6 +81,7 @@ func TestWriteMatchesSchema(t *testing.T) {
 				"d": {State: state.Dead, DeadSince: &dead, Reason: "liveness:pid_gone"},
 				"p": {State: state.Working, Reason: "event:working", Pane: "%1", Cwd: "/src/api", Transcript: "/t/p.jsonl",
 					TmuxSocket: "/tmp/tmux-1000/default", TmuxSession: "work", WindowIndex: &window, WindowName: "api"},
+				"m": {State: state.Idle, Reason: "event:idle", Meta: json.RawMessage(`{"name":"Fix login","turns":3,"pr":{"number":1,"state":"open"}}`)},
 			},
 		},
 	}

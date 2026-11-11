@@ -4,6 +4,7 @@
 package state
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -45,6 +46,8 @@ type Session struct {
 	TmuxSession string `json:"tmux_session,omitempty"`
 	WindowIndex *int   `json:"window_index,omitempty"`
 	WindowName  string `json:"window_name,omitempty"`
+	// Meta is the session's entry in meta.json, copied as the enrich run wrote it.
+	Meta json.RawMessage `json:"meta,omitempty"`
 }
 
 // Place is where a pane sits in its tmux server.
@@ -204,6 +207,17 @@ func (m *Machine) Restore(sessions map[string]Session) {
 
 	for id, s := range sessions {
 		m.sessions[id] = &s
+	}
+}
+
+// SetMeta sets a session's meta; it does nothing for an unknown session.
+// Thread-safe.
+func (m *Machine) SetMeta(sessionID string, meta json.RawMessage) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if s, ok := m.sessions[sessionID]; ok {
+		s.Meta = meta
 	}
 }
 
