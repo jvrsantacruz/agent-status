@@ -22,13 +22,12 @@ _An arrow is data from producer to consumer._
 
 ## contracts
 
-**tmux-resurrect -> tmux plugin** (file, save command strategy, auth none: runs as the user)
-On save, resurrect records what the strategy prints for a pane: the resume command when it
-holds a live session of its program. On restore it types it when its restore list matches; a
-user's inline strategy for claude or pi wins. The plugin needs resurrect installed with TPM,
-so it can find resurrect's strategy directory (`resurrect-strategy`), and harnesses that resume by id:
-`claude --resume`, `pi --session`.
-Requirements: `restore-resumes`, `resurrect-strategy`.
+| From -> to | Call | Ids | Returns | Auth |
+| --- | --- | --- | --- | --- |
+| tmux-resurrect -> tmux plugin | save command strategy | pane pid | resume command | runs as the user |
+
+- tmux-resurrect needs: the resume command for a pane holding a live session of its program; on restore it types it when its restore list matches, and a user's inline strategy for claude or pi wins.
+- tmux plugin needs: resurrect installed with TPM, to find its strategy directory (`resurrect-strategy`), and harnesses that resume by id: `claude --resume`, `pi --session`.
 
 ## failure modes
 

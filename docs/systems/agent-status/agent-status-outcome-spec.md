@@ -9,7 +9,6 @@ which starts the **judge command** detached and returns. The judge reads the tur
 session's transcript, asks a small model how it ended, and emits done, question or error, only
 while the session is still idle from that stop.
 
-unit: one turn.
 
 ```mermaid
 flowchart LR
@@ -31,22 +30,15 @@ _An arrow is data from producer to consumer._
 
 ## contracts
 
-**session -> agent-status emit** (file, agent-status emit command line, auth none: runs as the user)
-The session runs `emit done` or `emit error` with a one line summary; without `--claude-hook`
-the event is declared. It needs the session id, process id and pane its harness sets in the
-session's environment.
-Requirements: `turn-outcome`.
+| From -> to | Call | Ids | Returns | Auth |
+| --- | --- | --- | --- | --- |
+| session -> agent-status emit | `emit done`, `emit error` | session id, process id, pane from the session's environment | none | runs as the user |
+| Claude Code transcript -> agent-status judge | the session's JSONL transcript | transcript named by the stop hook's input | from the last prompt: the agent's text, the tools it called and which failed | file permissions |
+| agent-status judge -> claude | `claude -p` | none | one word | the user's Claude login |
 
-**Claude Code transcript -> agent-status judge** (file, the session's JSONL transcript, auth file permissions)
-The stop hook's input names the transcript. The judge reads the last prompt onward: the agent's
-text, the tools it called and which failed; never tool input or output. A turn that does not
-end with the agent's text is still running and is not judged.
-Requirements: `turn-outcome`, `private-text`.
-
-**agent-status judge -> claude** (file, `claude -p` command line, auth the user's Claude login)
-The judge sends the turn and asks for one word; the call runs with hooks off and keeps no
-session, so it never appears as a session itself. It runs outside the daemon.
-Requirements: `turn-outcome`, `local-only`.
+- agent-status emit needs: a one line summary; an event without `--claude-hook` is declared.
+- agent-status judge needs: a turn that ends with the agent's text, and never tool input or output; a turn that ends otherwise is still running and is not judged.
+- claude needs: hooks off and no session kept, so the call never appears as a session; it runs outside the daemon.
 
 ## states
 

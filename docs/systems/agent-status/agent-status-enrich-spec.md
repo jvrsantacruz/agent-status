@@ -9,7 +9,6 @@ command** once a minute. Enrich reads every live session's transcript, asks git 
 its directory and, when a turn has ended, asks the **namer** for a short name, then writes
 **meta.json**. On each export the daemon copies each entry into its session in state.json.
 
-unit: one live session; enrich makes one meta.json entry for each.
 
 ```mermaid
 flowchart LR
@@ -33,30 +32,24 @@ _An arrow is data from producer to consumer; git, gh and the namer are commands 
 
 ## building blocks
 
-**enrich command** (job, lives in `cmd/agent-status` and `internal/enrich`): one short process
-that exits; a lock in the state directory skips a run while another holds it, and the daemon
-never waits on it. Each Claude reply is counted once and priced at its own model, subagent
-transcripts add to their parent, and pi's own cost is taken as written (`internal/price`,
-`internal/transcript`).
+**enrich command** (job): one short process that exits; a lock in the state directory skips a
+run while another holds it, and the daemon never waits on it. Each Claude reply is counted
+once and priced at its own model, subagent transcripts add to their parent, and pi's own
+cost is taken as written. On a repository it runs only the two read commands below; gh has
+a timeout, and a failure or a branch with no pull request leaves the pull request out. The
+namer gets the first prompt, title and last turn. It is asked only when the session has new turns and no
+turn runs; until then, and when the call fails, the title's first words stand in. Enrich replaces meta.json whole on each run, mode 0600;
+the daemon copies an entry only into a session it holds, and a missing or unreadable file
+leaves every session's metadata as it was.
 
 ## contracts
 
-**enrich -> git and GitHub** (file, `git rev-parse --show-toplevel --abbrev-ref HEAD` in the session's directory and `gh pr view <branch> --json number,state` in the repository, auth the user's gh login)
-The two read commands are the only ones enrich runs on a repository. gh has a timeout, and a
-failure or a branch with no pull request leaves the pull request out.
-Requirements: `session-metadata`, `read-only`, `local-only`.
+| From -> to | Call | Ids | Returns | Auth |
+| --- | --- | --- | --- | --- |
+| enrich -> GitHub | `git rev-parse --show-toplevel --abbrev-ref HEAD`, `gh pr view <branch> --json number,state` | session directory, branch | repository, branch, pull request number and state | the user's gh login |
+| enrich -> claude | the judge's model command, replaced by `AGENT_STATUS_NAMER_COMMAND` | session id | at most four words | the user's claude login |
 
-**enrich -> namer** (file, the judge's model command, replaced by `AGENT_STATUS_NAMER_COMMAND`, auth the user's claude login)
-The first prompt, title and last turn in, at most four words out, with hooks off and no session
-kept, so a naming call is never a session. Asked only when the session has new turns and no turn
-runs; until then, and when the call fails, the title's first words stand in.
-Requirements: `short-name`, `local-only`.
-
-**enrich -> daemon** (file, meta.json, auth file permissions)
-Replaced whole on each run, mode 0600, in the shape of its
-[schema](https://github.com/jvrsantacruz/agent-status/blob/main/schema/meta.schema.json). The daemon copies an entry only into a session it holds,
-and a missing or unreadable file leaves every session's metadata as it was.
-Requirements: `session-metadata`, `private-text`.
+- claude needs: hooks off and no session kept, so a naming call is never a session.
 
 ## failure modes
 

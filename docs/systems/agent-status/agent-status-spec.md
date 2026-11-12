@@ -2,17 +2,15 @@
 
 ## overview
 
-The **agent-status binary** holds every command. A harness reports each state change with the
-**emit command**, which writes one line to a FIFO. The **daemon** reads it, keeps each
-session's state and event history, marks a session dead when its process exits, and writes
-**state.json**. In each tmux server, the **sync command** loads each pane's marker from
-state.json once a second. The **tmux plugin** starts sync. The **render command** prints a
-pane's marker for themes; the **doctor command** sends a test session through the FIFO. Neither is drawn. How a turn's outcome is set is in
-[agent-status-outcome-spec](agent-status-outcome-spec.md); how a restore resumes a session is in
-[agent-status-resurrect-spec](agent-status-resurrect-spec.md); how a session gets its place and metadata is in
-[agent-status-enrich-spec](agent-status-enrich-spec.md).
-
-unit: one agent session; every part above keeps or shows sessions.
+agent-status is one binary and a tmux plugin that mark each tmux window with its agent
+session's state. A harness reports each state change with the **emit command**, which
+writes one line to a FIFO. The **daemon** reads it, keeps each session's state, marks a
+session dead when its process exits, and writes **state.json**, which the user's programs
+also read. In each tmux server, the **sync command** loads each pane's marker from
+state.json into tmux. The **tmux plugin** starts sync. The
+[outcome spec](agent-status-outcome-spec.md) sets a turn's outcome, the
+[resurrect spec](agent-status-resurrect-spec.md) resumes a session on restore, and the
+[enrich spec](agent-status-enrich-spec.md) gives a session its place and metadata.
 
 ```mermaid
 flowchart LR
@@ -31,45 +29,36 @@ _The containers of one machine; an arrow is data from producer to consumer._
 
 ## building blocks
 
-**agent-status binary** (service, lives in `cmd/agent-status`): the daemon, a systemd user unit
+**agent-status binary** (service): the daemon, a systemd user unit
 or launchd agent, is the only writer of state.json and the history. Sync runs once per tmux
 server, waits for its first session, and ends with the server. The render command prints
-nothing on any error and always exits 0.
+a pane's marker for themes, nothing on any error, and always exits 0. The doctor command
+sends a test session through the FIFO. Emit drops Claude's idle reminder, a Notification of
+type idle_prompt, so the window keeps how the turn ended.
 
-**tmux plugin** (job, lives in `.`): defines the markers, puts the marker in the window format
+**tmux plugin** (job): defines the markers, puts the marker in the window format
 unless `@agent-status-auto-format` is off, and starts sync.
 
 ## contracts
 
-**harness -> agent-status emit** (file, agent-status emit command line, auth none: runs as the user)
-One event per state change, from Claude Code hooks, a pi extension or any program. The harness
-needs emit to exit 0 within its write timeout, except on a usage error such as no session id
-or an oversized line. agent-status needs the session id, process id, tmux pane, and a harness
-name equal to the program, so a restore can resume it. Emit drops Claude's idle reminder, a
-Notification of type idle_prompt, so the window keeps how the turn ended. A harness marks the
-prompt that starts a turn, `--prompt` or Claude's UserPromptSubmit hook, so nothing an earlier
-turn declared holds past it.
-[Event format](https://github.com/jvrsantacruz/agent-status#event-format).
-Requirements: `never-blocks`, `private-text`, `window-marks`, `turn-outcome`, `restore-resumes`.
+| From -> to | Call | Ids | Returns | Auth |
+| --- | --- | --- | --- | --- |
+| harness -> agent-status emit | emit command line | session id, process id, tmux pane, harness | exit code | runs as the user |
+| daemon -> user's programs | state.json | session id | sessions | file permissions |
+| sync -> tmux | pane option `@agent_mark` | tmux pane | none | tmux server socket |
 
-**daemon -> user's programs** (file, state.json, auth file permissions)
-Replaced whole on each change, so no reader sees half a file. Removing or changing a field
-raises the version of its
-[schema](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json).
-Requirements: `readable-record`.
-
-**sync -> tmux** (ui, tmux pane options, auth tmux server socket)
-Sync sets the pane option `@agent_mark` where a marker changed; the window format reads it, so
-a redraw runs no command.
-Requirements: `window-marks`.
+- harness needs: exit 0 within its write timeout, except on a usage error such as no session id or an oversized line.
+- agent-status emit needs: events in the [event format](https://github.com/jvrsantacruz/agent-status#event-format), a harness name equal to the program, and each turn's start marked by `--prompt` or Claude's UserPromptSubmit hook, so nothing an earlier turn declared holds past it.
+- user's programs need: a whole file on every read, and a new [schema](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json) version when a field is removed or changed.
+- tmux needs: the option set only where a marker changed, so a redraw runs no command.
 
 ## data model
 
 | entity | stored in | key | shape | written by | kept for |
 | --- | --- | --- | --- | --- | --- |
-| session | state.json | session id; pane id joins a tmux pane | [state.schema.json](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json) | daemon | while live, then the dead keep time in `cmd/agent-status/daemon.go`, across restarts |
+| session | state.json | session id; pane id joins a tmux pane | [state.schema.json](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json) | daemon | while live, then the dead keep time set in the daemon, across restarts |
 | session metadata | meta.json | session id | [meta.schema.json](https://github.com/jvrsantacruz/agent-status/blob/main/schema/meta.schema.json) | enrich | while the session is live |
-| event | state.db | row id; session id joins a session | session id, harness, event, process id, pane, sent and received time, understood; no message text | daemon | the retention in `cmd/agent-status/daemon.go` |
+| event | state.db | row id; session id joins a session | session id, harness, event, process id, pane, sent and received time, understood; no message text | daemon | the retention set in the daemon |
 
 state.json and state.db live in the state directory, `~/.local/state/agent-status` by default;
 the FIFO lives in the runtime directory, or the state directory when none is set.
