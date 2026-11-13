@@ -6,12 +6,15 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -106,8 +109,9 @@ func runDaemon() int {
 			c.lastEventAt.Store(now.UnixMilli())
 			notify()
 			// A new session gets its place now, not at the next liveness tick.
-			if socket, ok := needsPlace(sm, e.SessionID); ok {
+			if socket, ok := needsPlace(sm, e.SessionID); ok && asking.claim(socket) {
 				go func() {
+					defer asking.release(socket)
 					if c, err := setPlacesOn(sm, socket); err == nil && c {
 						notify()
 					}
@@ -182,6 +186,10 @@ func mergeMeta(sm *state.Machine) {
 	if err == nil {
 		err = json.Unmarshal(data, &mf)
 	}
+	if errors.Is(err, os.ErrNotExist) {
+		// Until the first enrich run writes it; doctor reports a stale file.
+		return
+	}
 	if err != nil {
 		slog.Warn("meta", "error", err)
 		return
@@ -243,6 +251,54 @@ func setPlaces(sm *state.Machine) (sockets, failed int, changed bool) {
 		changed = c || changed
 	}
 	return len(seen), failed, changed
+}
+
+// asking holds the servers being asked for places, so a server slow to answer
+// is asked once, not once per event.
+var asking = inFlight{m: map[string]bool{}}
+
+type inFlight struct {
+	mu sync.Mutex
+	m  map[string]bool
+}
+
+func (f *inFlight) claim(key string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.m[key] {
+		return false
+	}
+	f.m[key] = true
+	return true
+}
+
+func (f *inFlight) release(key string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.m, key)
+}
+
+// servicePath adds where tmux, gh and claude install to a service manager's
+// short PATH, so the daemon and what it starts find them.
+func servicePath(path, home string) string {
+	have := map[string]bool{}
+	for _, d := range filepath.SplitList(path) {
+		have[d] = true
+	}
+	var dirs []string
+	if path != "" {
+		dirs = append(dirs, path)
+	}
+	extra := []string{"/opt/homebrew/bin", "/home/linuxbrew/.linuxbrew/bin", "/usr/local/bin"}
+	if home != "" {
+		extra = append([]string{filepath.Join(home, ".local", "bin")}, extra...)
+	}
+	for _, d := range extra {
+		if !have[d] {
+			dirs = append(dirs, d)
+		}
+	}
+	return strings.Join(dirs, string(os.PathListSeparator))
 }
 
 // setPlacesOn asks one tmux server where its panes sit.

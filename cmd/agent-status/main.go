@@ -48,6 +48,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprint(stderr, usage)
 		return 2
 	}
+	// A service manager's short PATH: the daemon, and the enrich and judge
+	// runs it starts, still find tmux, gh and claude.
+	_ = os.Setenv("PATH", servicePath(os.Getenv("PATH"), os.Getenv("HOME")))
 	switch args[0] {
 	case "daemon":
 		return runDaemon()
