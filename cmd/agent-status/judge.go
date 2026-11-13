@@ -102,9 +102,13 @@ func askModel(ctx context.Context, envVar, prompt string) (string, error) {
 		cmd = exec.CommandContext(ctx, "sh", "-c", c)
 	} else {
 		// Hooks off, so the call is not a session of its own; no transcript kept.
+		// No tools and no MCP servers: it reads the prompt and answers.
 		cmd = exec.CommandContext(ctx, "claude", "-p", "--model", "haiku",
-			"--settings", `{"disableAllHooks":true}`, "--no-session-persistence")
+			"--settings", `{"disableAllHooks":true}`, "--no-session-persistence",
+			"--strict-mcp-config", "--tools", "")
 	}
+	// On timeout ask it to stop, so it can stop what it started.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	cmd.Stdin = strings.NewReader(prompt)
 	// A Claude session refuses to start inside another one.
 	cmd.Env = withoutEnv(os.Environ(), "CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PID")
