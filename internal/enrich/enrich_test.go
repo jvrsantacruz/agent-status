@@ -86,6 +86,8 @@ func TestNamer(t *testing.T) {
 		{"busy since it started: the title's words until the turn ends", "working", Meta{}, "", nil, Meta{Name: "Neutral session title LAB-42"}, false},
 		{"namer fails: the title's first words", "idle", Meta{}, "", errors.New("no claude"), Meta{Name: "Neutral session title LAB-42", NameTurns: 2}, true},
 		{"too long: four words", "idle", Meta{}, "one two three four five", nil, Meta{Name: "one two three four", NameTurns: 2}, true},
+		{"cut off by the run's budget: the old name, asked again later", "idle", Meta{Name: "Old", NameTurns: 1}, "", ErrNotNamed, Meta{Name: "Old", NameTurns: 1}, true},
+		{"cut off with no name yet: the title's words, asked again later", "idle", Meta{}, "", ErrNotNamed, Meta{Name: "Neutral session title LAB-42"}, true},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {

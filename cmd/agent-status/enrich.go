@@ -11,10 +11,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/jvrsantacruz/agent-status/internal/enrich"
 	"github.com/jvrsantacruz/agent-status/internal/state"
 )
+
+// enrichBudget is how long a run may spend naming sessions.
+const enrichBudget = 45 * time.Second
 
 // startEnrich runs enrich detached; the daemon reaps it and never waits on it.
 func startEnrich() error {
@@ -63,11 +67,25 @@ func runEnrich(stderr io.Writer) int {
 	}
 	out := enrich.File{Sessions: map[string]enrich.Meta{}}
 	named := 0
+	// A run ends within a minute, the next one's start: sessions past the
+	// budget keep their name and are named by a later run.
+	ctx, cancel := context.WithDeadline(context.Background(), start.Add(enrichBudget))
+	defer cancel()
 	for id, s := range st.Sessions {
 		if s.State == string(state.Dead) {
 			continue
 		}
-		m := enrich.Enrich(context.Background(), s, old.Sessions[id], namer)
+		n := enrich.Namer(func(_ context.Context, prompt string) (string, error) {
+			out, err := namer(ctx, prompt)
+			if ctx.Err() != nil {
+				return "", enrich.ErrNotNamed
+			}
+			return out, err
+		})
+		if ctx.Err() != nil {
+			n = nil
+		}
+		m := enrich.Enrich(context.Background(), s, old.Sessions[id], n)
 		if m.NameTurns != old.Sessions[id].NameTurns {
 			named++
 		}

@@ -8,6 +8,7 @@ package enrich
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -80,7 +81,11 @@ type Tokens struct {
 }
 
 // Namer asks a model for a short name; it gets the prompt and returns the answer.
+// A nil Namer, or one that returns ErrNotNamed, leaves naming to a later run.
 type Namer func(ctx context.Context, prompt string) (string, error)
+
+// ErrNotNamed is a namer's answer when it had no time to ask.
+var ErrNotNamed = errors.New("not named in this run")
 
 const namePrompt = `Name this coding agent session in at most four words, from its first
 prompt, its title and its last turn. Answer with the name only.
@@ -119,8 +124,12 @@ func Enrich(ctx context.Context, s Session, old Meta, name Namer) Meta {
 
 	m.Name, m.NameTurns = old.Name, old.NameTurns
 	switch {
-	case f.Turns > old.NameTurns && s.State != "working":
-		m.Name, m.NameTurns = makeName(ctx, s, f, name), f.Turns
+	case f.Turns > old.NameTurns && s.State != "working" && name != nil:
+		if n, ok := makeName(ctx, s, f, name); ok {
+			m.Name, m.NameTurns = n, f.Turns
+		} else if m.Name == "" {
+			m.Name = titleName(f)
+		}
 	case m.Name == "":
 		// A session busy since it started has a name from its title until the
 		// namer may run; name_turns stays, so the namer runs when the turn ends.
@@ -130,16 +139,21 @@ func Enrich(ctx context.Context, s Session, old Meta, name Namer) Meta {
 }
 
 // makeName asks the namer; on failure it takes the first words of the title.
-func makeName(ctx context.Context, s Session, f transcript.Facts, name Namer) string {
+// It reports false when the namer had no time, so a later run asks again.
+func makeName(ctx context.Context, s Session, f transcript.Facts, name Namer) (string, bool) {
 	turn, _ := transcript.LastTurn(s.TranscriptPath)
 	prompt := fmt.Sprintf("%sFirst prompt: %s\nTitle: %s\nLast turn:\n%s\n",
 		namePrompt, cut(f.FirstPrompt, firstPromptMax), f.Title, turn)
-	if out, err := name(ctx, prompt); err == nil {
+	out, err := name(ctx, prompt)
+	if errors.Is(err, ErrNotNamed) {
+		return "", false
+	}
+	if err == nil {
 		if n := words(strings.Trim(firstLine(out), "\"'`*. ")); n != "" {
-			return n
+			return n, true
 		}
 	}
-	return titleName(f)
+	return titleName(f), true
 }
 
 // titleName is the first words of the title, else of the first prompt.
