@@ -32,7 +32,9 @@ type enrichRig struct {
 }
 
 func newEnrichRig(t *testing.T, gh string) enrichRig {
-	dir := t.TempDir()
+	// git reports a repository by its real path; macOS temp dirs sit behind a link.
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
 	repo := filepath.Join(dir, "api")
 	realGit, err := exec.LookPath("git")
 	require.NoError(t, err)
