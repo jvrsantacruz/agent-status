@@ -87,7 +87,6 @@ func (r enrichRig) enrich() map[string]any {
 }
 
 // req: session-metadata
-// req: short-name
 // req: read-only
 func TestEnrichWritesMetaAndTheDaemonMergesIt(t *testing.T) {
 	r := newEnrichRig(t, `echo '{"number":7,"state":"OPEN"}'`)

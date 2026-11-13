@@ -21,7 +21,7 @@ flowchart LR
     state -- still idle? --> judge
     judge -- verdict --> daemon
   end
-  transcript[(Claude Code transcript)] -- the turn --> judge
+  transcript[(harness transcripts)] -- the Claude Code turn --> judge
   judge -- the turn --> model[claude]
   model -- one word --> judge
 ```
@@ -33,7 +33,7 @@ _An arrow is data from producer to consumer._
 | From -> to | Call | Ids | Returns | Auth |
 | --- | --- | --- | --- | --- |
 | session -> agent-status emit | cli `agent-status emit done`, `agent-status emit error` | session id, process id, pane from the session's environment | none | runs as the user |
-| Claude Code transcript -> agent-status judge | file `transcript_path`, the session's JSONL transcript | transcript named by the stop hook's input | from the last prompt: the agent's text, the tools it called and which failed | file permissions |
+| harness transcripts -> agent-status judge | file `transcript_path`, the session's JSONL transcript | transcript named by the stop hook's input | from the last prompt: the agent's text, the tools it called and which failed | file permissions |
 | agent-status judge -> claude | cli `claude -p` | none | one word | the user's Claude login |
 
 - agent-status emit needs: a one line summary; an event without `--claude-hook` is declared.

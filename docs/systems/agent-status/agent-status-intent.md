@@ -22,11 +22,12 @@ flowchart LR
   agent([harness]) -- reports each state change --> sys
   resurrect([tmux-resurrect]) -- saves each pane with its session --> sys
   reader([user's programs]) -- reads every session and its metadata --> sys
-  sys -- the turn from the Claude Code transcript --> claude[claude, small model]
+  transcript[(harness transcripts)] -- turns, title, usage --> sys
+  sys -- a turn, to judge or name it --> claude[claude, small model]
   sys -- the branch of a session's repository --> gh[GitHub, read only]
 ```
 
-_The use cases: each arrow into agent-status is an actor and its goal; the arrow out is the model the judge asks._
+_The use cases: each arrow into agent-status is an actor and its goal; the arrows out are the model and GitHub it asks._
 
 ## requirements
 
@@ -35,14 +36,13 @@ _The use cases: each arrow into agent-status is an actor and its goal; the arrow
 - `exit-clears`: If a session's process exits without an end event, then the window whose active pane held it MUST show it dead until the dead keep time passes or a live session takes that pane.
 - `restore-resumes`: Where resurrect integration is on, when tmux-resurrect restores a pane that held a live claude or pi session, the pane MUST reopen that same session.
 - `readable-record`: The system MUST let any program its user runs read the harness, state, pane, tmux session and window, working directory and transcript path of every current session.
-- `session-metadata`: Within a minute of a change, each session's record MUST hold its title, repository, branch, ticket, pull request, model, turns, last prompt, tokens, cost, start and last activity.
-- `short-name`: Each current session's record MUST carry a name of at most four words from its intent and last turns, made again only when it has new turns and no turn runs.
+- `session-metadata`: Within two minutes of a change to a session's transcript or branch, its record MUST hold its title, short name, repository, branch, ticket, pull request, model, turns, last prompt, tokens, cost and activity.
 - `read-only`: Gathering session metadata MUST NOT change any session, repository, pull request or tmux layout.
 
 ### non-functional
 
 - `never-blocks`: If the system is down or slow, then reporting a state change MUST NOT block the harness.
-- `private-text`: When reading a Claude Code hook's input or transcript, the system MUST NOT keep its prompt, tool input or error details, except the title, short name and a cut last prompt in its user's own files.
+- `private-text`: When reading a harness's hook input or transcript, the system MUST NOT keep its prompt, tool input or error details, except the title, short name and a cut last prompt in its user's own files.
 - `local-only`: Except the judge's and the namer's model calls and the enrich run's GitHub read calls, the system MUST NOT use the network.
 
 ### assumptions

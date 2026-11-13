@@ -38,7 +38,7 @@ once and priced at its own model, subagent transcripts add to their parent, and 
 cost is taken as written. On a repository it runs only the two read commands below; gh has
 a timeout, and a failure or a branch with no pull request leaves the pull request out. The
 namer gets the first prompt, title and last turn. It is asked only when the session has new turns and no
-turn runs; until then, and when the call fails, the title's first words stand in. Enrich replaces meta.json whole on each run, mode 0600;
+turn runs. Until a session's first name, and when the call fails, the title's first words stand in; a name is replaced only after a new turn ends. Enrich replaces meta.json whole on each run, mode 0600;
 the daemon copies an entry only into a session it holds, and a missing or unreadable file
 leaves every session's metadata as it was.
 
