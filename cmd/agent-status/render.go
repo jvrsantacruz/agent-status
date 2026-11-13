@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/jvrsantacruz/agent-status/internal/export"
@@ -69,10 +70,14 @@ func runSession(args []string, stdout io.Writer) int {
 
 func newestOnPane(sf export.StateFile, pane string, keep func(state.Session) bool) (string, *state.Session) {
 	pane = pane[strings.LastIndex(pane, ":")+1:]
+	// Pane ids repeat across tmux servers: a session from another server is
+	// not this pane's.
+	server := tmuxSocket(os.Getenv("TMUX"))
 	var id string
 	var newest *state.Session
 	for sid, s := range sf.Sessions {
-		if s.Pane == pane && keep(s) && (newest == nil || s.UpdatedAt > newest.UpdatedAt) {
+		other := server != "" && s.TmuxSocket != "" && s.TmuxSocket != server
+		if s.Pane == pane && !other && keep(s) && (newest == nil || s.UpdatedAt > newest.UpdatedAt) {
 			id, newest = sid, &s
 		}
 	}

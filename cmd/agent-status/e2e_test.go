@@ -302,6 +302,30 @@ func TestSession(t *testing.T) {
 	}
 }
 
+// req: window-marks
+// Pane ids repeat across tmux servers: a session from another server never
+// marks, or is resumed into, a pane of this one.
+func TestPaneOfAnotherServer(t *testing.T) {
+	dir := t.TempDir()
+	sf := `{"sessions":{
+		"here":{"harness":"claude","state":"working","tmux_pane":"%3","tmux_socket":"/tmp/a","updated_at":100},
+		"there":{"harness":"claude","state":"question","tmux_pane":"%3","tmux_socket":"/tmp/b","updated_at":200},
+		"old":{"harness":"claude","state":"error","tmux_pane":"%4","updated_at":100}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.json"), []byte(sf), 0o600))
+	env := cleanEnv(dir, "TMUX=/tmp/a,1,0")
+
+	out, err := command(dir, env, "render", "%3").Output()
+	require.NoError(t, err)
+	assert.Equal(t, "#{E:@agent_mark_working}", string(out))
+	out, err = command(dir, env, "session", "%3").Output()
+	require.NoError(t, err)
+	assert.Equal(t, "claude here\n", string(out))
+	// A session sent before events carried the socket still matches.
+	out, err = command(dir, env, "render", "%4").Output()
+	require.NoError(t, err)
+	assert.Equal(t, "#{E:@agent_mark_error}", string(out))
+}
+
 func TestRenderWithoutStateIsSilent(t *testing.T) {
 	dir := t.TempDir()
 	out, err := command(dir, cleanEnv(dir), "render", "%0").CombinedOutput()
