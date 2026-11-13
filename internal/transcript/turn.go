@@ -6,8 +6,10 @@ package transcript
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -106,7 +108,36 @@ func LastTurn(path string) (string, error) {
 }
 
 func scanner(f *os.File) *bufio.Scanner {
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 1<<20), 16<<20)
+	return newLineScanner(f, maxLine)
+}
+
+// maxLine bounds one transcript line; a longer one, such as a large tool
+// output, is skipped and the lines after it are still read.
+const maxLine = 16 << 20
+
+func newLineScanner(r io.Reader, limit int) *bufio.Scanner {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, min(1<<20, limit)), limit)
+	skipping := false
+	sc.Split(func(data []byte, atEOF bool) (int, []byte, error) {
+		if i := bytes.IndexByte(data, '\n'); i >= 0 {
+			if skipping {
+				skipping = false
+				return i + 1, nil, nil
+			}
+			return i + 1, bytes.TrimSuffix(data[:i], []byte("\r")), nil
+		}
+		if atEOF {
+			if skipping || len(data) == 0 {
+				return len(data), nil, nil
+			}
+			return len(data), bytes.TrimSuffix(data, []byte("\r")), nil
+		}
+		if len(data) >= limit {
+			skipping = true
+			return len(data), nil, nil
+		}
+		return 0, nil, nil
+	})
 	return sc
 }

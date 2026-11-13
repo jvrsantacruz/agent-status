@@ -43,3 +43,18 @@ func TestLastTurnStillRunningIsEmpty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, turn)
 }
+
+// A line longer than the limit, such as a large tool output, is skipped and
+// the lines after it are still read.
+func TestLineScannerSkipsLongLines(t *testing.T) {
+	t.Parallel()
+	long := strings.Repeat("x", 100)
+	in := "a\n" + long + "\nb\r\n" + long + "\nc\r"
+	sc := newLineScanner(strings.NewReader(in), 64)
+	var got []string
+	for sc.Scan() {
+		got = append(got, sc.Text())
+	}
+	assert.NoError(t, sc.Err())
+	assert.Equal(t, []string{"a", "b", "c"}, got)
+}
