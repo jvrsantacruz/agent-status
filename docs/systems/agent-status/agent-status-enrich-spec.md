@@ -4,7 +4,7 @@
 
 How each session's record gets its place in tmux and its metadata. Emit adds the working
 directory, transcript path and tmux socket to every event. The **daemon** asks each tmux server
-where its panes sit, on a session's first event and once a minute, and starts the **enrich
+where its panes sit, one call at a time per server, on a session's first event and once a minute, and starts the **enrich
 command** once a minute. Enrich reads every live session's transcript, asks git and GitHub about
 its directory and, when a turn has ended, asks the **namer** for a short name, then writes
 **meta.json**. On each export the daemon copies each entry into its session in state.json.
@@ -46,16 +46,19 @@ leaves every session's metadata as it was.
 
 | From -> to | Call | Ids | Returns | Auth |
 | --- | --- | --- | --- | --- |
-| enrich -> GitHub | `git rev-parse --show-toplevel --abbrev-ref HEAD`, `gh pr view <branch> --json number,state` | session directory, branch | repository, branch, pull request number and state | the user's gh login |
-| enrich -> claude | the judge's model command, replaced by `AGENT_STATUS_NAMER_COMMAND` | session id | at most four words | the user's claude login |
+| enrich -> git | cli `git rev-parse --show-toplevel --abbrev-ref HEAD` | session directory | repository, branch | file permissions |
+| enrich -> GitHub | cli `gh pr view <branch> --json number,state` | repository, branch | pull request number and state | the user's gh login |
+| enrich -> claude | cli `claude -p`, or `AGENT_STATUS_NAMER_COMMAND` | none | at most four words | the user's claude login |
 
-- claude needs: hooks off and no session kept, so a naming call is never a session.
+- claude needs: hooks off, no session kept, no tools and no MCP servers, so a naming call is never a session.
 
 ## failure modes
 
 - **No transcript or no repository**: the entry leaves those fields out and keeps the rest; the next run tries again.
 - **gh slow or failing**: the pull request is left out for that run.
 - **Model not priced**: the cost is left out, never guessed.
+- **Naming runs long**: a run stops asking the namer once its naming budget is spent; the sessions left keep their name until a later run.
+- **Transcript line too long**: the line is skipped and the rest of the transcript is read.
 
 ## validation
 

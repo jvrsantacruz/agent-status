@@ -2,6 +2,16 @@
 
 ## 0.4.0
 
+- tmux: a session from another tmux server no longer marks, or is resumed into, a pane with the
+  same id on this one.
+- The daemon finds `tmux`, `gh` and `claude` under `brew services` and systemd, whose PATH leaves
+  out `/opt/homebrew/bin` and `~/.local/bin`; places, pull requests and names were empty there.
+- The daemon asks a slow tmux server for its panes once, not once per event.
+- An enrich run stops naming once its budget is spent; the other sessions are named by a later
+  run instead of holding up meta.json.
+- The judge and the namer run `claude` with no tools and no MCP servers, and stop it gently on
+  timeout.
+- A transcript line too long to read is skipped instead of ending the read.
 - Events carry `cwd`, `transcript_path` and `tmux_socket`: `emit --claude-hook` reads the first two
   from Claude's hook input, `emit --cwd` and `--transcript` set them for any agent, and the socket
   comes from `$TMUX`. A line over 512 bytes cuts the message first, then drops these three.
