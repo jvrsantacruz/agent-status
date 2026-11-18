@@ -17,11 +17,12 @@ import (
 	"time"
 
 	"github.com/jvrsantacruz/agent-status/internal/export"
+	"github.com/jvrsantacruz/agent-status/internal/state"
 )
 
 const syncEvery = time.Second
 
-// runSync loads each pane's marker into the tmux pane option @agent_mark, so
+// runSync loads each window's most urgent marker into the pane option @agent_mark, so
 // the window list reads it and runs no job. It reads state.json once a pass
 // and sets only what changed, so an unchanged state never redraws the status
 // line. One runs per tmux server; it exits when the server is gone.
@@ -79,7 +80,7 @@ func serverAlive() bool {
 // syncPass returns an error only when tmux cannot be asked for its panes. A
 // state.json that cannot be read skips the pass: the next one repairs it.
 func syncPass() error {
-	out, err := exec.Command("tmux", "list-panes", "-a", "-F", "#{pane_id} #{@agent_mark}").Output()
+	out, err := exec.Command("tmux", "list-panes", "-a", "-F", "#{window_id} #{pane_id} #{@agent_mark}").Output()
 	if err != nil {
 		return err
 	}
@@ -98,28 +99,54 @@ func syncPass() error {
 	return nil
 }
 
-// syncArgs returns one tmux command line that brings every pane's
-// @agent_mark to its marker, or nothing when every pane already has it.
-// current is list-panes output: a pane id and its option on each line.
+// syncArgs returns one tmux command line that gives every pane its window's
+// marker, or nothing when every pane already has it. A window shows the pane
+// that most needs me, so the mark does not depend on which pane is active.
+// current is list-panes output: window id, pane id and option on each line.
 func syncArgs(sf export.StateFile, current string) []string {
-	var args []string
+	type pane struct{ window, id, have string }
+	var panes []pane
+	top := map[string]string{}
 	for _, line := range strings.Split(strings.TrimSpace(current), "\n") {
-		pane, have, _ := strings.Cut(line, " ")
-		if pane == "" {
+		f := strings.SplitN(line, " ", 3)
+		if len(f) < 2 || f[1] == "" {
 			continue
 		}
-		want := marker(sf, pane)
-		if want == have {
+		p := pane{window: f[0], id: f[1]}
+		if len(f) == 3 {
+			p.have = f[2]
+		}
+		panes = append(panes, p)
+		if m := marker(sf, p.id); markRank(m) > markRank(top[p.window]) {
+			top[p.window] = m
+		}
+	}
+	var args []string
+	for _, p := range panes {
+		want := top[p.window]
+		if want == p.have {
 			continue
 		}
 		if len(args) > 0 {
 			args = append(args, ";")
 		}
 		if want == "" {
-			args = append(args, "set-option", "-p", "-u", "-t", pane, "@agent_mark")
+			args = append(args, "set-option", "-p", "-u", "-t", p.id, "@agent_mark")
 		} else {
-			args = append(args, "set-option", "-p", "-t", pane, "@agent_mark", want)
+			args = append(args, "set-option", "-p", "-t", p.id, "@agent_mark", want)
 		}
 	}
 	return args
+}
+
+// markOrder ranks the marks from the one that most needs me; idle has none.
+var markOrder = []state.SessionState{state.Error, state.Question, state.Working, state.Done, state.Dead}
+
+func markRank(mark string) int {
+	for i, s := range markOrder {
+		if mark == fmt.Sprintf("#{E:@agent_mark_%s}", s) {
+			return len(markOrder) - i
+		}
+	}
+	return 0
 }

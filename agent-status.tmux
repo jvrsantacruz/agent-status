@@ -35,7 +35,7 @@ set_default @agent_mark_error '#[fg=colour1]✗ #[default]'
 set_default @agent_mark_done '#[fg=colour2]✓ #[default]'
 set_default @agent_mark_dead '#[fg=colour8,dim]x #[default]'
 
-# One sync per server reads state.json and loads each pane's marker into
+# One sync per server reads state.json and loads each window's most urgent marker into
 # @agent_mark; the window list only reads it, so a redraw runs no job.
 tmux run-shell -b "'$bin' sync"
 
