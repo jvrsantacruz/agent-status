@@ -6,7 +6,7 @@ agent-status is one binary and a tmux plugin that mark each tmux window with its
 session's state. A harness reports each state change with the **emit command**, which
 writes one line to a FIFO. The **daemon** reads it, keeps each session's state, marks a
 session dead when its process exits, and writes **state.json**, which the user's programs
-also read. In each tmux server, the **sync command** loads each pane's marker from
+also read. In each tmux server, the **sync command** loads each window's most urgent mark from
 state.json into tmux. The **tmux plugin** starts sync. The
 [outcome](agent-status-outcome-spec.md), [resurrect](agent-status-resurrect-spec.md) and
 [enrich](agent-status-enrich-spec.md) specs cover a turn's outcome, restore and metadata.
@@ -44,12 +44,12 @@ unless `@agent-status-auto-format` is off, and starts sync.
 | --- | --- | --- | --- | --- |
 | harness -> agent-status emit | cli `agent-status emit` | session id, process id, tmux pane, harness | exit code | runs as the user |
 | daemon -> user's programs | file `state.json` | session id | sessions | file permissions |
-| sync -> tmux | cli `tmux set-option -p @agent_mark` | tmux pane | none | tmux server socket |
+| sync -> tmux | cli `tmux set-option -p @agent_mark` | each window's panes | none | tmux server socket |
 
 - harness needs: exit 0 within its write timeout, except on a usage error such as no session id or an oversized line.
 - agent-status emit needs: events in the [event format](https://github.com/jvrsantacruz/agent-status#event-format), a harness name equal to the program, and each turn's start marked by `--prompt` or Claude's UserPromptSubmit hook, so nothing an earlier turn declared holds past it.
 - user's programs need: a whole file on every read, and a new [schema](https://github.com/jvrsantacruz/agent-status/blob/main/schema/state.schema.json) version when a field is removed or changed.
-- tmux needs: the option set only where a marker changed, so a redraw runs no command.
+- tmux needs: every pane of a window set to its marker, only where it changed, so a redraw runs no command.
 
 ## data model
 

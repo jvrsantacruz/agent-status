@@ -31,9 +31,9 @@ _The use cases: each arrow into agent-status is an actor and its goal; the arrow
 
 ## requirements
 
-- `window-marks`: The tmux window list MUST mark each window whose active pane holds a session that is working, asking a question, in error or done.
+- `window-marks`: The tmux window list MUST mark each window with the most urgent state among its panes' sessions: error, then question, then working, then done, then dead.
 - `turn-outcome`: When a turn ends, its window MUST show until the next prompt a harness error, else the session's declared done or error, else, where the judge is on for Claude Code, a small model's reading.
-- `exit-clears`: If a session's process exits without an end event, then the window whose active pane held it MUST show it dead until the dead keep time passes or a live session takes that pane.
+- `exit-clears`: If a session's process exits without an end event, then it MUST count as dead in its window's mark until the dead keep time passes or a live session takes its pane.
 - `restore-resumes`: Where resurrect integration is on, when tmux-resurrect restores a pane that held a live claude or pi session, the pane MUST reopen that same session.
 - `readable-record`: The system MUST let any program its user runs read the harness, state, pane, tmux session and window, working directory and transcript path of every current session.
 - `session-metadata`: Within two minutes of a change to a session's transcript or branch, its record MUST hold its title, short name, repository, branch, ticket, pull request, model, turns, last prompt, tokens, cost and activity.

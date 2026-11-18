@@ -120,10 +120,12 @@ agent hook or any program --> agent-status emit --> FIFO --> agent-status daemon
   that each agent process still runs; a session whose process is gone shows as dead for 5 minutes,
   then disappears.
 - The plugin starts one `agent-status sync` per tmux server. Once a second it reads `state.json`
-  and sets the pane option `@agent_mark` on each pane whose marker changed, to a reference to
+  and gives each window the marker of its most urgent pane: error, then question, then working,
+  then done, then dead; idle shows none. It sets the pane option `@agent_mark` on every pane of
+  the window, so the mark shows whichever pane is active, to a reference to
   `@agent_mark_<state>`, so the plugin or your theme decides glyphs and colours. The window list
   only reads the option: a redraw runs no command, and an unchanged state redraws nothing.
-  `agent-status render <pane>` prints the same reference, for themes that call it.
+  `agent-status render <pane>` prints that pane's own reference, for themes that call it.
 
 ## Event format
 

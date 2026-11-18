@@ -2,7 +2,7 @@
 
 A Go daemon and CLI that shows in the tmux window list what each AI coding agent is doing.
 Agents emit events to a FIFO; the daemon keeps state and writes `state.json`; one `sync` per
-tmux server loads each pane's marker into `@agent_mark`, which the window list reads. README.md "How it works" has the diagram.
+tmux server loads each window's most urgent marker into `@agent_mark`, which the window list reads. README.md "How it works" has the diagram.
 
 ## Commands
 

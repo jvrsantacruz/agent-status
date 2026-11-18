@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- tmux: a window shows its most urgent pane, not only the active one: error, then question,
+  then working, then done, then dead; idle shows none. A second pane in error or waiting on a
+  question no longer hides behind an active pane that is working or idle.
+
 ## 0.4.0
 
 - tmux: a session from another tmux server no longer marks, or is resumed into, a pane with the
